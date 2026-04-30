@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
-import type { TestStep, PageSnapshot, TestScenario, BugReport, Severity } from '../types';
+import type { ExplorationMap, PageSnapshot, TestScenario, BugReport, Severity } from '../types';
+import { getConfig } from '../config/Config';
 
 /**
  * Thin wrapper around the OpenAI chat-completions API.
@@ -8,13 +9,17 @@ import type { TestStep, PageSnapshot, TestScenario, BugReport, Severity } from '
 export class LLMClient {
   private client: OpenAI;
   private model: string;
+  private hasConfiguredModel: boolean;
 
   constructor() {
+    const config = getConfig();
+    const apiKey = config.openAiApiKey;
     this.client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY ?? 'no-key',
-      baseURL: process.env.OPENAI_BASE_URL,
+      apiKey: apiKey ?? 'no-key',
+      baseURL: config.openAiBaseUrl,
     });
-    this.model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+    this.model = config.openAiModel;
+    this.hasConfiguredModel = Boolean(apiKey && apiKey !== 'sk-...' && apiKey !== 'test-key');
   }
 
   /**
@@ -22,10 +27,18 @@ export class LLMClient {
    * Returns an array of partial TestScenario objects (without id/runId/status).
    */
   async generateTestScenarios(
-    snapshot: PageSnapshot,
+    discovery: PageSnapshot | ExplorationMap,
   ): Promise<Array<Omit<TestScenario, 'id' | 'runId' | 'status'>>> {
+    const snapshots = 'snapshots' in discovery ? discovery.snapshots : [discovery];
+    const fallback = this.generateHeuristicScenarios(snapshots);
+
+    if (!this.hasConfiguredModel) {
+      console.warn('[LLMClient] OPENAI_API_KEY is not configured. Using dynamic heuristic scenario generation.');
+      return fallback;
+    }
+
     const systemPrompt = `You are a senior QA automation engineer.
-Given a JSON snapshot of a web page (URL, title, forms, buttons, links, inputs),
+Given JSON exploration data for a web application (URLs, titles, forms, buttons, links, inputs),
 generate realistic end-to-end test scenarios for a QA agent to execute.
 
 Rules:
@@ -35,7 +48,7 @@ Rules:
 - Selectors must be valid CSS selectors derived from the snapshot.
 - Each scenario must have 2–8 steps using these action types:
     navigate | click | fill | submit | wait | screenshot | assert_visible | assert_text | assert_url
-- Return ONLY a valid JSON array — no markdown fences, no extra text.
+- Return ONLY a valid JSON object with a "scenarios" array — no markdown fences, no extra text.
 
 JSON schema for each scenario:
 {
@@ -52,10 +65,16 @@ JSON schema for each scenario:
   ]
 }`;
 
-    const userPrompt = `Page snapshot:\n${JSON.stringify(snapshot, null, 2)}`;
+    const userPrompt = `Exploration data:\n${JSON.stringify(discovery, null, 2)}`;
 
-    const raw = await this.chat(systemPrompt, userPrompt);
-    return this.parseJSON<Array<Omit<TestScenario, 'id' | 'runId' | 'status'>>>(raw, []);
+    try {
+      const raw = await this.chat(systemPrompt, userPrompt);
+      const parsed = this.parseJSON<Array<Omit<TestScenario, 'id' | 'runId' | 'status'>>>(raw, fallback);
+      return parsed.length > 0 ? parsed : fallback;
+    } catch (err) {
+      console.warn('[LLMClient] LLM scenario generation failed. Falling back to dynamic heuristics:', (err as Error).message);
+      return fallback;
+    }
   }
 
   /**
@@ -102,8 +121,9 @@ Return ONLY valid JSON — no markdown fences, no extra text.`;
       errorStack,
     }, null, 2);
 
-    const raw = await this.chat(systemPrompt, userPrompt);
-    const parsed = this.parseJSON<Partial<BugReport>>(raw, {});
+    const parsed = this.hasConfiguredModel
+      ? this.parseJSON<Partial<BugReport>>(await this.chat(systemPrompt, userPrompt), {})
+      : {};
 
     return {
       title: parsed.title ?? 'Unknown issue',
@@ -148,5 +168,93 @@ Return ONLY valid JSON — no markdown fences, no extra text.`;
       console.warn('[LLMClient] Failed to parse LLM response:', raw.slice(0, 200));
       return fallback;
     }
+  }
+
+  private generateHeuristicScenarios(
+    snapshots: PageSnapshot[],
+  ): Array<Omit<TestScenario, 'id' | 'runId' | 'status'>> {
+    const scenarios: Array<Omit<TestScenario, 'id' | 'runId' | 'status'>> = [];
+    const visitedTitles = new Set<string>();
+
+    for (const snapshot of snapshots.slice(0, 4)) {
+      const startUrl = snapshot.finalUrl ?? snapshot.url;
+      const pageLabel = snapshot.title || new URL(startUrl).pathname || 'page';
+
+      if (!visitedTitles.has(`navigation:${startUrl}`) && snapshot.links.length > 0) {
+        visitedTitles.add(`navigation:${startUrl}`);
+        const link = snapshot.links.find((candidate) => candidate.href && !candidate.href.startsWith('mailto:')) ?? snapshot.links[0];
+        scenarios.push({
+          title: `Explore primary navigation from ${pageLabel}`,
+          description: 'Validate that a prominent discovered link can be used without browser or network failures.',
+          priority: 'high',
+          steps: [
+            { action: 'navigate', value: startUrl, description: `Open ${startUrl}` },
+            { action: 'assert_visible', selector: link.selector, description: `Confirm navigation target is visible: ${link.text ?? link.href ?? link.selector}` },
+            { action: 'click', selector: link.selector, description: `Open discovered navigation target: ${link.text ?? link.href ?? link.selector}` },
+            { action: 'wait', value: '1200', description: 'Wait for navigation or UI transition to settle' },
+            { action: 'screenshot', value: 'navigation_after_click', description: 'Capture navigation result' },
+          ],
+        });
+      }
+
+      for (const form of snapshot.forms.slice(0, 3)) {
+        const fillableInputs = form.inputs.filter((input) => input.type !== 'submit' && input.selector);
+        if (fillableInputs.length === 0) continue;
+
+        const steps = [
+          { action: 'navigate' as const, value: startUrl, description: `Open ${startUrl}` },
+          ...fillableInputs.slice(0, 5).map((input) => ({
+            action: 'fill' as const,
+            selector: input.selector,
+            value: this.fakeValueForInput(input.type, `${input.name ?? ''} ${input.placeholder ?? ''}`),
+            description: `Fill ${input.placeholder ?? input.name ?? input.type ?? input.selector}`,
+          })),
+          {
+            action: 'submit' as const,
+            selector: form.submitButton?.selector ?? fillableInputs[fillableInputs.length - 1].selector,
+            description: `Submit discovered form${form.id ? ` ${form.id}` : ''}`,
+          },
+          { action: 'wait' as const, value: '1500', description: 'Wait for validation, navigation, or API response' },
+          { action: 'screenshot' as const, value: 'form_submission_result', description: 'Capture form submission result' },
+        ];
+
+        scenarios.push({
+          title: `Exercise discovered form on ${pageLabel}`,
+          description: 'Use inferred realistic data to verify that a discovered form responds correctly.',
+          priority: fillableInputs.some((input) => input.type === 'password' || input.type === 'email') ? 'high' : 'medium',
+          steps,
+        });
+      }
+
+      for (const button of snapshot.buttons.slice(0, 4)) {
+        scenarios.push({
+          title: `Verify button interaction: ${button.text ?? button.ariaLabel ?? button.selector}`,
+          description: 'Click a discovered UI control and capture whether it produces visible browser evidence.',
+          priority: /sign|login|checkout|save|submit|continue/i.test(`${button.text ?? ''} ${button.ariaLabel ?? ''}`) ? 'high' : 'medium',
+          steps: [
+            { action: 'navigate', value: startUrl, description: `Open ${startUrl}` },
+            { action: 'assert_visible', selector: button.selector, description: `Confirm button is visible: ${button.text ?? button.selector}` },
+            { action: 'click', selector: button.selector, description: `Click ${button.text ?? button.ariaLabel ?? button.selector}` },
+            { action: 'wait', value: '1000', description: 'Wait for UI response' },
+            { action: 'screenshot', value: 'button_interaction_result', description: 'Capture button interaction result' },
+          ],
+        });
+      }
+    }
+
+    return scenarios.slice(0, 12);
+  }
+
+  private fakeValueForInput(type: string | undefined, label: string): string {
+    const normalized = `${type ?? ''} ${label}`.toLowerCase();
+    if (normalized.includes('email')) return 'qa.copilot@example.com';
+    if (normalized.includes('password')) return 'QA-Copilot-123!';
+    if (normalized.includes('phone') || normalized.includes('tel')) return '+15555550199';
+    if (normalized.includes('name')) return 'QA Copilot User';
+    if (normalized.includes('company') || normalized.includes('org')) return 'Acme QA Labs';
+    if (normalized.includes('search')) return 'dashboard';
+    if (normalized.includes('url')) return 'https://example.com';
+    if (normalized.includes('number')) return '42';
+    return 'QA Copilot test value';
   }
 }

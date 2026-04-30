@@ -34,14 +34,23 @@ export interface InteractiveElement {
 
 export interface PageSnapshot {
   url: string;
+  finalUrl?: string;
   title: string;
   forms: FormInfo[];
   inputs: InteractiveElement[];
   buttons: InteractiveElement[];
   links: InteractiveElement[];
+  headings?: string[];
   consoleErrors: string[];
   networkErrors: string[];
   screenshotPath?: string;
+}
+
+export interface ExplorationMap {
+  entryUrl: string;
+  snapshots: PageSnapshot[];
+  routes: string[];
+  discoveredAt: string;
 }
 
 export interface FormInfo {
@@ -70,6 +79,20 @@ export interface TestStep {
   selector?: string;
   value?: string;       // text to fill / URL to assert
   description: string;  // human-readable label
+}
+
+export interface ActionObservation {
+  stepDescription: string;
+  action: ActionType;
+  selector?: string;
+  beforeUrl: string;
+  afterUrl: string;
+  urlChanged: boolean;
+  domChanged: boolean;
+  networkActivityDelta: number;
+  networkErrorsDelta: number;
+  consoleErrorsDelta: number;
+  durationMs: number;
 }
 
 export interface TestScenario {
@@ -106,6 +129,29 @@ export interface BugReport {
   errorStack?: string;
 }
 
+// ─── Product Risk Radar ─────────────────────────────────────────────────────
+
+export type RiskSignalType =
+  | 'dead_interaction'
+  | 'accessibility_gap'
+  | 'conversion_friction'
+  | 'navigation_risk'
+  | 'technical_reliability'
+  | 'coverage_gap';
+
+export interface ProductRiskSignal {
+  id: string;
+  runId: string;
+  scenarioId?: string;
+  type: RiskSignalType;
+  title: string;
+  severity: Severity;
+  evidence: string[];
+  recommendation: string;
+  url: string;
+  detectedAt: string;
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export interface SeverityCounts {
@@ -128,9 +174,26 @@ export interface Dashboard {
   skippedScenarios: number;
   bugsFound: number;
   severityCounts: SeverityCounts;
+  riskScore: number;
   bugs: BugReport[];
   scenarios: TestScenario[];
+  productRiskSignals: ProductRiskSignal[];
+  exploratoryMap?: ExplorationMap;
   coverageAreas: string[];
+}
+
+// ─── Regression Contracts ──────────────────────────────────────────────────
+
+export interface RegressionContract {
+  runId: string;
+  url: string;
+  generatedAt: string;
+  framework: 'playwright';
+  testCount: number;
+  sourceIssueCount: number;
+  sourceRiskCount: number;
+  specFilename: string;
+  spec: string;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────

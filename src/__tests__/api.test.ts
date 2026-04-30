@@ -40,6 +40,7 @@ jest.mock('../database/Repository', () => {
     getAllRuns: jest.fn().mockReturnValue([]),
     getScenariosByRun: jest.fn().mockReturnValue([]),
     getBugsByRun: jest.fn().mockReturnValue([]),
+    getRiskSignalsByRun: jest.fn().mockReturnValue([]),
   };
 });
 
@@ -131,6 +132,42 @@ describe('GET /api/runs/:id/scenarios', () => {
     const res = await request(app).get('/api/runs/mock-run-id/scenarios');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+
+describe('GET /api/runs/:id/risks', () => {
+  test('returns an array for a known run', async () => {
+    const res = await request(app).get('/api/runs/mock-run-id/risks');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+
+describe('GET /api/runs/:id/regression-contract', () => {
+  test('returns a generated Playwright regression contract', async () => {
+    const res = await request(app).get('/api/runs/mock-run-id/regression-contract');
+    expect(res.status).toBe(200);
+    expect(res.body.framework).toBe('playwright');
+    expect(res.body.specFilename).toContain('qa-copilot-mock-run-id');
+    expect(res.body.spec).toContain('baseline page remains reachable');
+  });
+});
+
+describe('GET /api/runs/:id/regression-spec', () => {
+  test('returns the raw Playwright spec', async () => {
+    const res = await request(app).get('/api/runs/mock-run-id/regression-spec');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("import { test, expect } from '@playwright/test'");
+    expect(res.headers['content-disposition']).toContain('qa-copilot-mock-run-id');
+  });
+});
+
+describe('GET /api/metrics', () => {
+  test('returns counters and recent events', async () => {
+    const res = await request(app).get('/api/metrics');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('counters');
+    expect(res.body).toHaveProperty('recentEvents');
   });
 });
 

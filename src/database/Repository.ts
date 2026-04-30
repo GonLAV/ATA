@@ -3,6 +3,7 @@ import type {
   TestRun,
   TestScenario,
   BugReport,
+  ProductRiskSignal,
   RunStatus,
 } from '../types';
 
@@ -211,5 +212,51 @@ function rowToBug(row: Record<string, unknown>): BugReport {
       ? JSON.parse(row.network_errors as string)
       : undefined,
     errorStack: row.error_stack as string | undefined,
+  };
+}
+
+// ─── Product Risk Signals ───────────────────────────────────────────────────
+
+export function createProductRiskSignal(signal: ProductRiskSignal): ProductRiskSignal {
+  const db = getDatabase();
+  db.prepare(`
+    INSERT INTO product_risk_signals
+      (id, run_id, scenario_id, type, title, severity, evidence, recommendation, url, detected_at)
+    VALUES
+      (@id, @runId, @scenarioId, @type, @title, @severity, @evidence, @recommendation, @url, @detectedAt)
+  `).run({
+    id: signal.id,
+    runId: signal.runId,
+    scenarioId: signal.scenarioId ?? null,
+    type: signal.type,
+    title: signal.title,
+    severity: signal.severity,
+    evidence: JSON.stringify(signal.evidence),
+    recommendation: signal.recommendation,
+    url: signal.url,
+    detectedAt: signal.detectedAt,
+  });
+  return signal;
+}
+
+export function getRiskSignalsByRun(runId: string): ProductRiskSignal[] {
+  const db = getDatabase();
+  const rows = db.prepare('SELECT * FROM product_risk_signals WHERE run_id = ? ORDER BY detected_at').all(runId) as
+    Record<string, unknown>[];
+  return rows.map(rowToProductRiskSignal);
+}
+
+function rowToProductRiskSignal(row: Record<string, unknown>): ProductRiskSignal {
+  return {
+    id: row.id as string,
+    runId: row.run_id as string,
+    scenarioId: row.scenario_id as string | undefined,
+    type: row.type as ProductRiskSignal['type'],
+    title: row.title as string,
+    severity: row.severity as ProductRiskSignal['severity'],
+    evidence: JSON.parse(row.evidence as string),
+    recommendation: row.recommendation as string,
+    url: row.url as string,
+    detectedAt: row.detected_at as string,
   };
 }

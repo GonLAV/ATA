@@ -1,10 +1,11 @@
-import { v4 as uuidv4 } from 'uuid';
-import type { Page, BrowserContext, Request, Response } from 'playwright';
+import { randomUUID } from 'crypto';
+import type { Page, Request, Response } from 'playwright';
 
 import { BrowserManager } from '../browser/BrowserManager';
 import { PageExplorer } from '../browser/PageExplorer';
 import { ScreenshotManager } from '../browser/ScreenshotManager';
 import { LLMClient } from './LLMClient';
+import { ProductRiskRadar } from './ProductRiskRadar';
 import {
   createRun,
   updateRun,
@@ -12,11 +13,17 @@ import {
   createScenario,
   updateScenario,
   createBugReport,
+  createProductRiskSignal,
   getBugsByRun,
   getScenariosByRun,
+  getRiskSignalsByRun,
 } from '../database/Repository';
 import { buildDashboard } from '../reporters/BugReporter';
+import { getConfig } from '../config/Config';
+import { observability } from '../observability/Observability';
 import type {
+  ActionObservation,
+  ExplorationMap,
   TestRun,
   TestScenario,
   TestStep,
@@ -24,8 +31,6 @@ import type {
   Dashboard,
   PageSnapshot,
 } from '../types';
-
-const STEP_TIMEOUT_MS = 10_000;
 
 /**
  * The main QA Agent orchestrator.
@@ -43,12 +48,21 @@ export class QAAgent {
   private screenshotManager: ScreenshotManager;
   private explorer: PageExplorer;
   private llm: LLMClient;
+  private riskRadar: ProductRiskRadar;
+  private stepTimeoutMs: number;
+  private discoveryPageLimit: number;
+  private maxScenarios: number;
 
   constructor() {
     this.browserManager = new BrowserManager();
     this.screenshotManager = new ScreenshotManager();
     this.explorer = new PageExplorer(this.screenshotManager);
     this.llm = new LLMClient();
+    this.riskRadar = new ProductRiskRadar();
+    const config = getConfig();
+    this.stepTimeoutMs = config.stepTimeoutMs;
+    this.discoveryPageLimit = config.discoveryPageLimit;
+    this.maxScenarios = config.maxScenarios;
   }
 
   /**
@@ -56,7 +70,29 @@ export class QAAgent {
    * Returns the run ID so callers can poll for results asynchronously.
    */
   async startRun(url: string): Promise<string> {
-    const runId = uuidv4();
+    const runId = this.createRunRecord(url);
+
+    // Execute asynchronously so the HTTP response returns immediately
+    this.execute(runId, url).catch((err) => {
+      console.error(`[QAAgent] Run ${runId} crashed:`, err);
+      updateRun(runId, { status: 'failed', completedAt: new Date().toISOString() });
+      observability.emit('run.failed', { runId, payload: { error: (err as Error).message } });
+    });
+
+    return runId;
+  }
+
+  /**
+   * Block until the run is complete and return the dashboard.
+   * Useful for CLI / direct invocation.
+   */
+  async runSync(url: string): Promise<Dashboard> {
+    const runId = this.createRunRecord(url);
+    return this.execute(runId, url);
+  }
+
+  private createRunRecord(url: string): string {
+    const runId = randomUUID();
     const run: TestRun = {
       id: runId,
       url,
@@ -68,46 +104,34 @@ export class QAAgent {
       bugsFound: 0,
     };
     createRun(run);
-
-    // Execute asynchronously so the HTTP response returns immediately
-    this.execute(runId, url).catch((err) => {
-      console.error(`[QAAgent] Run ${runId} crashed:`, err);
-      updateRun(runId, { status: 'failed', completedAt: new Date().toISOString() });
-    });
-
     return runId;
-  }
-
-  /**
-   * Block until the run is complete and return the dashboard.
-   * Useful for CLI / direct invocation.
-   */
-  async runSync(url: string): Promise<Dashboard> {
-    const runId = await this.startRun(url);
-    return this.execute(runId, url);
   }
 
   // ─── Core execution pipeline ─────────────────────────────────────────────
 
   private async execute(runId: string, url: string): Promise<Dashboard> {
     updateRun(runId, { status: 'running' });
+    observability.emit('run.started', { runId, payload: { url } });
     console.log(`[QAAgent] Starting run ${runId} for ${url}`);
 
     try {
       await this.browserManager.launch();
 
       // ── Step 1: Explore the page ──
-      const exploreContext = await this.browserManager.newContext();
-      let snapshot: PageSnapshot;
-      try {
-        snapshot = await this.explorer.explore(exploreContext, url);
-      } finally {
-        await exploreContext.close();
-      }
+      const explorationMap = await this.exploreApplication(url);
+      const snapshot = explorationMap.snapshots[0];
 
       console.log(
         `[QAAgent] Snapshot: ${snapshot.buttons.length} buttons, ${snapshot.forms.length} forms, ${snapshot.links.length} links`,
       );
+
+      for (const exploredSnapshot of explorationMap.snapshots) {
+        const signals = this.riskRadar.analyzeSnapshot(runId, exploredSnapshot);
+        for (const signal of signals) {
+          createProductRiskSignal(signal);
+          observability.emit('risk.detected', { runId, payload: { type: signal.type, severity: signal.severity } });
+        }
+      }
 
       // Log any immediately visible issues from the initial page load
       if (snapshot.consoleErrors.length > 0) {
@@ -115,12 +139,12 @@ export class QAAgent {
       }
 
       // ── Step 2: Generate test scenarios ──
-      const rawScenarios = await this.llm.generateTestScenarios(snapshot);
+        const rawScenarios = (await this.llm.generateTestScenarios(explorationMap)).slice(0, this.maxScenarios);
       console.log(`[QAAgent] LLM generated ${rawScenarios.length} scenarios`);
 
       const scenarios: TestScenario[] = rawScenarios.map((s) => ({
         ...s,
-        id: uuidv4(),
+        id: randomUUID(),
         runId,
         status: 'pending',
       }));
@@ -137,12 +161,19 @@ export class QAAgent {
 
       for (const scenario of scenarios) {
         console.log(`[QAAgent] Executing: "${scenario.title}"`);
+        observability.emit('scenario.started', { runId, scenarioId: scenario.id, payload: { title: scenario.title } });
         const result = await this.executeScenario(runId, url, scenario);
 
         if (result.bug) {
           createBugReport(result.bug);
           bugsFound++;
           updateRun(runId, { bugsFound });
+          observability.emit('bug.detected', { runId, scenarioId: scenario.id, payload: { severity: result.bug.severity } });
+        }
+
+        for (const signal of result.riskSignals) {
+          createProductRiskSignal(signal);
+          observability.emit('risk.detected', { runId, scenarioId: scenario.id, payload: { type: signal.type, severity: signal.severity } });
         }
 
         if (result.passed) {
@@ -152,6 +183,7 @@ export class QAAgent {
         }
 
         updateRun(runId, { passedScenarios: passed, failedScenarios: failed });
+        observability.emit('scenario.completed', { runId, scenarioId: scenario.id, payload: { passed: result.passed } });
       }
 
       // ── Step 4: Finalise ──
@@ -173,10 +205,58 @@ export class QAAgent {
 
       const allScenarios = getScenariosByRun(runId);
       const allBugs = getBugsByRun(runId);
-      return buildDashboard(finalRun, allScenarios, allBugs);
+      const allRiskSignals = getRiskSignalsByRun(runId);
+      observability.emit('run.completed', { runId, payload: { scenarios: scenarios.length, bugsFound, riskSignals: allRiskSignals.length } });
+      return buildDashboard(finalRun, allScenarios, allBugs, allRiskSignals, explorationMap);
     } finally {
       await this.browserManager.close();
     }
+  }
+
+  private async exploreApplication(url: string): Promise<ExplorationMap> {
+    const context = await this.browserManager.newContext();
+    const snapshots: PageSnapshot[] = [];
+
+    try {
+      const firstSnapshot = await this.explorer.explore(context, url);
+      snapshots.push(firstSnapshot);
+
+      const sameOriginLinks = this.sameOriginLinks(firstSnapshot, url).slice(0, this.discoveryPageLimit - 1);
+      for (const link of sameOriginLinks) {
+        const snapshot = await this.explorer.explore(context, link);
+        snapshots.push(snapshot);
+      }
+    } finally {
+      await context.close();
+    }
+
+    return {
+      entryUrl: url,
+      snapshots,
+      routes: Array.from(new Set(snapshots.map((snapshot) => snapshot.finalUrl ?? snapshot.url))),
+      discoveredAt: new Date().toISOString(),
+    };
+  }
+
+  private sameOriginLinks(snapshot: PageSnapshot, baseUrl: string): string[] {
+    const base = new URL(baseUrl);
+    const links = snapshot.links
+      .map((link) => link.href)
+      .filter((href): href is string => Boolean(href))
+      .map((href) => {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((href): href is string => Boolean(href))
+      .filter((href) => {
+        const parsed = new URL(href);
+        return parsed.origin === base.origin && !parsed.hash;
+      });
+
+    return Array.from(new Set(links));
   }
 
   // ─── Scenario executor ────────────────────────────────────────────────────
@@ -185,13 +265,15 @@ export class QAAgent {
     runId: string,
     baseUrl: string,
     scenario: TestScenario,
-  ): Promise<{ passed: boolean; bug?: BugReport }> {
+  ): Promise<{ passed: boolean; bug?: BugReport; riskSignals: ReturnType<ProductRiskRadar['analyzeScenario']> }> {
     const context = await this.browserManager.newContext();
     const page = await context.newPage();
 
     const consoleErrors: string[] = [];
     const networkErrors: string[] = [];
+    const networkActivity: string[] = [];
     const executedSteps: string[] = [];
+    const observations: ActionObservation[] = [];
 
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -203,6 +285,7 @@ export class QAAgent {
       networkErrors.push(`${req.method()} ${req.url()} — ${req.failure()?.errorText ?? 'unknown'}`);
     });
     page.on('response', (res: Response) => {
+      networkActivity.push(`${res.status()} ${res.url()}`);
       if (res.status() >= 400) {
         networkErrors.push(`HTTP ${res.status()} ${res.url()}`);
       }
@@ -215,11 +298,12 @@ export class QAAgent {
 
     try {
       // Always start from base URL
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: STEP_TIMEOUT_MS });
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: this.stepTimeoutMs });
       executedSteps.push(`Navigate to ${baseUrl}`);
 
       for (const step of scenario.steps) {
-        await this.executeStep(page, step, baseUrl);
+        const observation = await this.executeStep(page, step, baseUrl, consoleErrors, networkErrors, networkActivity);
+        observations.push(observation);
         executedSteps.push(step.description);
       }
     } catch (err) {
@@ -246,9 +330,10 @@ export class QAAgent {
 
     const status: TestScenario['status'] = hasError ? 'failed' : 'passed';
     updateScenario(scenario.id, { status, durationMs });
+    const riskSignals = this.riskRadar.analyzeScenario(runId, scenario, observations);
 
     if (!hasError) {
-      return { passed: true };
+      return { passed: true, riskSignals };
     }
 
     // Classify bug via LLM
@@ -264,7 +349,7 @@ export class QAAgent {
     );
 
     const bug: BugReport = {
-      id: uuidv4(),
+      id: randomUUID(),
       runId,
       scenarioId: scenario.id,
       detectedAt: new Date().toISOString(),
@@ -272,13 +357,26 @@ export class QAAgent {
       ...bugDetails,
     };
 
-    return { passed: false, bug };
+    return { passed: false, bug, riskSignals };
   }
 
   // ─── Step executor ────────────────────────────────────────────────────────
 
-  private async executeStep(page: Page, step: TestStep, baseUrl: string): Promise<void> {
-    const timeout = STEP_TIMEOUT_MS;
+  private async executeStep(
+    page: Page,
+    step: TestStep,
+    baseUrl: string,
+    consoleErrors: string[],
+    networkErrors: string[],
+    networkActivity: string[],
+  ): Promise<ActionObservation> {
+    const timeout = this.stepTimeoutMs;
+    const beforeUrl = page.url();
+    const beforeText = await this.bodyText(page);
+    const beforeConsoleCount = consoleErrors.length;
+    const beforeNetworkErrorCount = networkErrors.length;
+    const beforeNetworkActivityCount = networkActivity.length;
+    const startedAt = Date.now();
 
     switch (step.action) {
       case 'navigate':
@@ -346,5 +444,26 @@ export class QAAgent {
       default:
         console.warn(`[QAAgent] Unknown action type: ${(step as TestStep).action}`);
     }
+
+    const afterText = await this.bodyText(page);
+    const afterUrl = page.url();
+
+    return {
+      stepDescription: step.description,
+      action: step.action,
+      selector: step.selector,
+      beforeUrl,
+      afterUrl,
+      urlChanged: beforeUrl !== afterUrl,
+      domChanged: beforeText !== afterText,
+      networkActivityDelta: networkActivity.length - beforeNetworkActivityCount,
+      networkErrorsDelta: networkErrors.length - beforeNetworkErrorCount,
+      consoleErrorsDelta: consoleErrors.length - beforeConsoleCount,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  private async bodyText(page: Page): Promise<string> {
+    return page.locator('body').innerText({ timeout: 1000 }).then((text) => text.slice(0, 5000)).catch(() => '');
   }
 }

@@ -6,8 +6,11 @@ import {
   getAllRuns,
   getScenariosByRun,
   getBugsByRun,
+  getRiskSignalsByRun,
 } from '../database/Repository';
 import { buildDashboard, BugReporter } from '../reporters/BugReporter';
+import { RegressionContractBuilder } from '../contracts/RegressionContractBuilder';
+import { observability } from '../observability/Observability';
 import type { CreateRunResponse } from '../types';
 
 const router = Router();
@@ -78,7 +81,8 @@ router.get('/runs/:id/dashboard', (req: Request, res: Response): void => {
 
   const scenarios = getScenariosByRun(run.id);
   const bugs = getBugsByRun(run.id);
-  const dashboard = buildDashboard(run, scenarios, bugs);
+  const risks = getRiskSignalsByRun(run.id);
+  const dashboard = buildDashboard(run, scenarios, bugs, risks);
   res.json(dashboard);
 });
 
@@ -93,7 +97,8 @@ router.get('/runs/:id/report', (req: Request, res: Response): void => {
 
   const scenarios = getScenariosByRun(run.id);
   const bugs = getBugsByRun(run.id);
-  const dashboard = buildDashboard(run, scenarios, bugs);
+  const risks = getRiskSignalsByRun(run.id);
+  const dashboard = buildDashboard(run, scenarios, bugs, risks);
   const markdown = BugReporter.renderDashboard(dashboard);
 
   res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
@@ -124,6 +129,60 @@ router.get('/runs/:id/scenarios', (req: Request, res: Response): void => {
 
   const scenarios = getScenariosByRun(run.id);
   res.json(scenarios);
+});
+
+// ─── GET /api/runs/:id/risks ────────────────────────────────────────────────
+// Get all Product Risk Radar signals for a specific run.
+router.get('/runs/:id/risks', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const risks = getRiskSignalsByRun(run.id);
+  res.json(risks);
+});
+
+// ─── GET /api/runs/:id/regression-contract ─────────────────────────────────
+// Generate a Playwright regression contract from bugs and risk signals.
+router.get('/runs/:id/regression-contract', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const scenarios = getScenariosByRun(run.id);
+  const bugs = getBugsByRun(run.id);
+  const risks = getRiskSignalsByRun(run.id);
+  const contract = new RegressionContractBuilder().build(run, scenarios, bugs, risks);
+  res.json(contract);
+});
+
+// ─── GET /api/runs/:id/regression-spec ─────────────────────────────────────
+// Download the generated Playwright spec directly for CI adoption.
+router.get('/runs/:id/regression-spec', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const scenarios = getScenariosByRun(run.id);
+  const bugs = getBugsByRun(run.id);
+  const risks = getRiskSignalsByRun(run.id);
+  const contract = new RegressionContractBuilder().build(run, scenarios, bugs, risks);
+
+  res.setHeader('Content-Type', 'text/typescript; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${contract.specFilename}"`);
+  res.send(contract.spec);
+});
+
+// ─── GET /api/metrics ───────────────────────────────────────────────────────
+// Lightweight observability endpoint for local runs and CI smoke checks.
+router.get('/metrics', (_req: Request, res: Response): void => {
+  res.json(observability.metrics());
 });
 
 export default router;
