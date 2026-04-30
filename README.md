@@ -72,7 +72,7 @@ POST /api/runs { url }
 - **Runtime-resilient SQLite:** Node.js 22+ uses built-in `node:sqlite`; older Node runtimes can use optional `better-sqlite3` when native build tools are available.
 - **Small, testable boundaries:** browser exploration, LLM reasoning, risk analysis, release gates, regression contracts, persistence, reporting, config, and observability each live behind separate modules.
 - **CI/CD-ready observability:** run, scenario, bug, and risk events are exposed through `/api/metrics`. This can later be bridged to OpenTelemetry without rewriting the agent.
-- **Security-first API posture:** `/api` routes can be protected with `QA_COPILOT_API_KEY`, JSON bodies are size-limited, baseline security headers are set, per-IP throttling is enabled, and private/local target URLs are blocked by literal host and DNS resolution to reduce SSRF risk.
+- **Security-first API posture:** `/api` routes can be protected with `QA_COPILOT_API_KEY`, JSON bodies are size-limited, baseline security headers are set, per-IP throttling is enabled, and private/local target URLs are blocked by literal host and DNS resolution both at API intake and inside Playwright browser contexts to reduce SSRF risk.
 
 ### Next-Level Feature: Product Risk Radar
 

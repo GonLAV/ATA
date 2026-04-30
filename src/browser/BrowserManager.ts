@@ -1,5 +1,6 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { getConfig } from '../config/Config';
+import { installTargetNetworkGuard } from '../api/security';
 
 export interface BrowserConfig {
   headless: boolean;
@@ -40,12 +41,15 @@ export class BrowserManager {
 
   async newContext(): Promise<BrowserContext> {
     if (!this.browser) await this.launch();
-    return this.browser!.newContext({
+    const context = await this.browser!.newContext({
       viewport: { width: this.config.width, height: this.config.height },
       userAgent:
         'Mozilla/5.0 (compatible; QACopilot/1.0; +https://github.com/GonLAV/ATA)',
       ignoreHTTPSErrors: true,
     });
+
+    await installTargetNetworkGuard(context);
+    return context;
   }
 
   async close(): Promise<void> {

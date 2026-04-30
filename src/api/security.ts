@@ -2,12 +2,22 @@ import type { NextFunction, Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'net';
+import type { BrowserContext } from 'playwright';
 import { getConfig } from '../config/Config';
+
+const DNS_CACHE_TTL_MS = 30_000;
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
+
+interface DnsCacheEntry {
+  addresses: string[];
+  expiresAt: number;
+}
+
+const dnsCache = new Map<string, DnsCacheEntry>();
 
 export interface TargetValidationResult {
   allowed: boolean;
@@ -54,6 +64,20 @@ export function safeEquals(actual: string, expected: string): boolean {
   const actualBuffer = Buffer.from(actual);
   const expectedBuffer = Buffer.from(expected);
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+export async function installTargetNetworkGuard(context: BrowserContext): Promise<void> {
+  if (getConfig().allowPrivateTargets) return;
+
+  await context.route('**/*', async (route, request) => {
+    const result = await validateTargetUrl(request.url());
+    if (!result.allowed) {
+      await route.abort('blockedbyclient');
+      return;
+    }
+
+    await route.continue();
+  });
 }
 
 export async function validateTargetUrl(value: string): Promise<TargetValidationResult> {
@@ -111,9 +135,15 @@ async function resolveHostname(hostname: string): Promise<string[]> {
   const normalized = hostname.replace(/^\[|\]$/g, '');
   if (isIP(normalized)) return [normalized];
 
+  const now = Date.now();
+  const cached = dnsCache.get(normalized);
+  if (cached && cached.expiresAt > now) return cached.addresses;
+
   try {
     const records = await lookup(normalized, { all: true, verbatim: true });
-    return records.map((record) => record.address);
+    const addresses = records.map((record) => record.address);
+    dnsCache.set(normalized, { addresses, expiresAt: now + DNS_CACHE_TTL_MS });
+    return addresses;
   } catch {
     return [];
   }
