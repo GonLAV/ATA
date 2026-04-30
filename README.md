@@ -72,6 +72,7 @@ POST /api/runs { url }
 - **Runtime-resilient SQLite:** Node.js 22+ uses built-in `node:sqlite`; older Node runtimes can use optional `better-sqlite3` when native build tools are available.
 - **Small, testable boundaries:** browser exploration, LLM reasoning, risk analysis, release gates, regression contracts, persistence, reporting, config, and observability each live behind separate modules.
 - **CI/CD-ready observability:** run, scenario, bug, and risk events are exposed through `/api/metrics`. This can later be bridged to OpenTelemetry without rewriting the agent.
+- **Security-first API posture:** `/api` routes can be protected with `QA_COPILOT_API_KEY`, JSON bodies are size-limited, baseline security headers are set, and private/local target URLs are blocked by default to reduce SSRF risk.
 
 ### Next-Level Feature: Product Risk Radar
 
@@ -180,6 +181,8 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `OPENAI_BASE_URL` | OpenAI default | Override for Azure / Ollama / LM Studio |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model for test generation |
 | `PORT` | `3000` | HTTP server port |
+| `QA_COPILOT_API_KEY` | _(unset)_ | Optional API key for `/api` routes; provide via `x-qa-copilot-api-key` or bearer auth |
+| `LOG_HTTP_REQUESTS` | `true` | Structured HTTP request logging; defaults to false in tests |
 | `DATABASE_PATH` | `./qa_copilot.db` | SQLite file path |
 | `SCREENSHOTS_DIR` | `./screenshots` | Directory for screenshots |
 | `HEADLESS` | `true` | Set to `false` for headed browser |
@@ -188,6 +191,7 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `STEP_TIMEOUT_MS` | `10000` | Per-action Playwright timeout |
 | `DISCOVERY_PAGE_LIMIT` | `4` | Maximum same-origin pages explored before scenario generation |
 | `MAX_SCENARIOS` | `12` | Reserved scenario generation cap for future queue controls |
+| `ALLOW_PRIVATE_TARGETS` | `false` | Allow testing localhost/private IP targets; enable only in trusted local environments |
 | `RELEASE_GATE_MIN_RISK_SCORE` | `75` | Minimum Product Risk Radar score required to ship |
 | `RELEASE_GATE_MAX_HIGH_SEVERITY_BUGS` | `0` | Maximum critical/high bugs allowed before blocking |
 | `RELEASE_GATE_MAX_HIGH_SEVERITY_RISKS` | `2` | Maximum critical/high product risks before warning |

@@ -3,10 +3,13 @@
  */
 import request from 'supertest';
 import { createApp } from '../api/server';
+import { resetConfigForTests } from '../config/Config';
 
 // Use in-memory database for tests
 process.env.DATABASE_PATH = ':memory:';
 process.env.OPENAI_API_KEY = 'test-key';
+delete process.env.QA_COPILOT_API_KEY;
+delete process.env.ALLOW_PRIVATE_TARGETS;
 
 // We mock the QAAgent so we don't spin up a real browser
 jest.mock('../agents/QAAgent', () => {
@@ -52,6 +55,14 @@ describe('GET /health', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
   });
+
+  test('sets baseline security headers and request id', async () => {
+    const res = await request(app).get('/health');
+    expect(res.headers['x-request-id']).toBeDefined();
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['content-security-policy']).toContain("default-src 'none'");
+  });
 });
 
 describe('POST /api/runs', () => {
@@ -74,6 +85,54 @@ describe('POST /api/runs', () => {
   test('returns 400 for an invalid URL', async () => {
     const res = await request(app).post('/api/runs').send({ url: 'not-a-url' });
     expect(res.status).toBe(400);
+  });
+
+  test('returns 400 for malformed JSON', async () => {
+    const res = await request(app)
+      .post('/api/runs')
+      .set('Content-Type', 'application/json')
+      .send('{"url":');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('Malformed JSON');
+  });
+
+  test('blocks private targets unless explicitly allowed', async () => {
+    resetConfigForTests();
+    const res = await request(app).post('/api/runs').send({ url: 'http://127.0.0.1:3000' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('private or local');
+  });
+});
+
+describe('API authentication', () => {
+  const previousApiKey = process.env.QA_COPILOT_API_KEY;
+
+  beforeAll(() => {
+    process.env.QA_COPILOT_API_KEY = 'test-api-key-12345';
+    resetConfigForTests();
+  });
+
+  afterAll(() => {
+    if (previousApiKey === undefined) {
+      delete process.env.QA_COPILOT_API_KEY;
+    } else {
+      process.env.QA_COPILOT_API_KEY = previousApiKey;
+    }
+    resetConfigForTests();
+  });
+
+  test('rejects API requests without a configured key', async () => {
+    const securedApp = createApp();
+    const res = await request(securedApp).get('/api/runs');
+    expect(res.status).toBe(401);
+  });
+
+  test('accepts API requests with x-qa-copilot-api-key', async () => {
+    const securedApp = createApp();
+    const res = await request(securedApp)
+      .get('/api/runs')
+      .set('x-qa-copilot-api-key', 'test-api-key-12345');
+    expect(res.status).toBe(200);
   });
 });
 
