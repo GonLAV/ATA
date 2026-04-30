@@ -72,7 +72,7 @@ POST /api/runs { url }
 - **Runtime-resilient SQLite:** Node.js 22+ uses built-in `node:sqlite`; older Node runtimes can use optional `better-sqlite3` when native build tools are available.
 - **Small, testable boundaries:** browser exploration, LLM reasoning, risk analysis, release gates, regression contracts, persistence, reporting, config, and observability each live behind separate modules.
 - **CI/CD-ready observability:** run, scenario, bug, and risk events are exposed through `/api/metrics`. This can later be bridged to OpenTelemetry without rewriting the agent.
-- **Security-first API posture:** `/api` routes can be protected with `QA_COPILOT_API_KEY`, JSON bodies are size-limited, baseline security headers are set, and private/local target URLs are blocked by default to reduce SSRF risk.
+- **Security-first API posture:** `/api` routes can be protected with `QA_COPILOT_API_KEY`, JSON bodies are size-limited, baseline security headers are set, per-IP throttling is enabled, and private/local target URLs are blocked by literal host and DNS resolution to reduce SSRF risk.
 
 ### Next-Level Feature: Product Risk Radar
 
@@ -182,6 +182,9 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model for test generation |
 | `PORT` | `3000` | HTTP server port |
 | `QA_COPILOT_API_KEY` | _(unset)_ | Optional API key for `/api` routes; provide via `x-qa-copilot-api-key` or bearer auth |
+| `API_RATE_LIMIT_WINDOW_MS` | `60000` | Sliding window duration for in-process per-IP API throttling |
+| `API_RATE_LIMIT_MAX` | `120` | Maximum `/api` requests per IP per window; set to `0` only behind trusted gateway limits |
+| `TRUST_PROXY_HOPS` | `0` | Number of trusted reverse proxy hops for client IP resolution |
 | `LOG_HTTP_REQUESTS` | `true` | Structured HTTP request logging; defaults to false in tests |
 | `DATABASE_PATH` | `./qa_copilot.db` | SQLite file path |
 | `SCREENSHOTS_DIR` | `./screenshots` | Directory for screenshots |

@@ -1,7 +1,8 @@
 import express from 'express';
-import { randomUUID, timingSafeEqual } from 'crypto';
+import { randomUUID } from 'crypto';
 import routes from './routes';
 import { getConfig } from '../config/Config';
+import { createApiRateLimiter, safeEquals } from './security';
 
 const JSON_BODY_LIMIT = '1mb';
 
@@ -11,9 +12,10 @@ const JSON_BODY_LIMIT = '1mb';
  */
 export function createApp() {
   const app = express();
+  const config = getConfig();
 
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.trustProxyHops);
 
   app.use((req, res, next) => {
     const requestId = randomUUID();
@@ -49,6 +51,7 @@ export function createApp() {
   });
 
   // API routes
+  app.use('/api', createApiRateLimiter());
   app.use('/api', requireApiKey);
   app.use('/api', routes);
 
@@ -95,10 +98,4 @@ function extractApiKey(req: express.Request): string | undefined {
   const authorization = req.header('authorization');
   if (!authorization?.startsWith('Bearer ')) return undefined;
   return authorization.slice('Bearer '.length).trim();
-}
-
-function safeEquals(actual: string, expected: string): boolean {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }

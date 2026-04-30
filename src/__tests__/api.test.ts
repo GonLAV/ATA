@@ -67,9 +67,15 @@ describe('GET /health', () => {
 
 describe('POST /api/runs', () => {
   test('accepts a valid URL and returns 202 with runId', async () => {
+    process.env.ALLOW_PRIVATE_TARGETS = 'true';
+    resetConfigForTests();
+
     const res = await request(app)
       .post('/api/runs')
       .send({ url: 'https://example.com' });
+
+    delete process.env.ALLOW_PRIVATE_TARGETS;
+    resetConfigForTests();
 
     expect(res.status).toBe(202);
     expect(res.body.runId).toBe('mock-run-id');
@@ -133,6 +139,43 @@ describe('API authentication', () => {
       .get('/api/runs')
       .set('x-qa-copilot-api-key', 'test-api-key-12345');
     expect(res.status).toBe(200);
+  });
+});
+
+describe('API rate limiting', () => {
+  const previousMax = process.env.API_RATE_LIMIT_MAX;
+  const previousWindow = process.env.API_RATE_LIMIT_WINDOW_MS;
+
+  beforeAll(() => {
+    process.env.API_RATE_LIMIT_MAX = '1';
+    process.env.API_RATE_LIMIT_WINDOW_MS = '60000';
+    resetConfigForTests();
+  });
+
+  afterAll(() => {
+    if (previousMax === undefined) {
+      delete process.env.API_RATE_LIMIT_MAX;
+    } else {
+      process.env.API_RATE_LIMIT_MAX = previousMax;
+    }
+
+    if (previousWindow === undefined) {
+      delete process.env.API_RATE_LIMIT_WINDOW_MS;
+    } else {
+      process.env.API_RATE_LIMIT_WINDOW_MS = previousWindow;
+    }
+    resetConfigForTests();
+  });
+
+  test('returns 429 after the configured request budget is exhausted', async () => {
+    const limitedApp = createApp();
+
+    const first = await request(limitedApp).get('/api/runs');
+    const second = await request(limitedApp).get('/api/runs');
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(second.headers['retry-after']).toBeDefined();
   });
 });
 

@@ -12,13 +12,13 @@ import { buildDashboard, BugReporter } from '../reporters/BugReporter';
 import { RegressionContractBuilder } from '../contracts/RegressionContractBuilder';
 import { ReleaseGateEvaluator } from '../gates/ReleaseGateEvaluator';
 import { observability } from '../observability/Observability';
-import { getConfig } from '../config/Config';
+import { validateTargetUrl } from './security';
 import type { BugReport, CreateRunResponse, ProductRiskSignal, TestRun, TestScenario } from '../types';
 
 const router = Router();
 
 const CreateRunSchema = z.object({
-  url: z.string().url('Must be a valid URL').transform((value) => new URL(value).toString()),
+  url: z.string().url('Must be a valid URL'),
 });
 
 interface RunArtifacts {
@@ -40,14 +40,14 @@ router.post('/runs', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const { url } = parsed.data;
-  if (!isAllowedTargetUrl(url)) {
-    res.status(400).json({ error: 'URL targets private or local network resources. Set ALLOW_PRIVATE_TARGETS=true only in trusted environments.' });
+  const target = await validateTargetUrl(parsed.data.url);
+  if (!target.allowed || !target.normalizedUrl) {
+    res.status(400).json({ error: target.error ?? 'URL is not allowed.' });
     return;
   }
 
   try {
-    const runId = await agent.startRun(url);
+    const runId = await agent.startRun(target.normalizedUrl);
     const body: CreateRunResponse = {
       runId,
       message: `QA run started. Poll GET /api/runs/${runId} for status.`,
@@ -218,30 +218,6 @@ function loadRunArtifacts(runId: string, res: Response): RunArtifacts | undefine
     bugs: getBugsByRun(run.id),
     risks: getRiskSignalsByRun(run.id),
   };
-}
-
-function isAllowedTargetUrl(url: string): boolean {
-  const parsed = new URL(url);
-  if (!['http:', 'https:'].includes(parsed.protocol)) return false;
-  if (getConfig().allowPrivateTargets) return true;
-  return !isPrivateHostname(parsed.hostname);
-}
-
-function isPrivateHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true;
-  if (normalized === '::1' || normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
-
-  const parts = normalized.split('.').map((part) => Number.parseInt(part, 10));
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return false;
-
-  const [first, second] = parts;
-  return first === 10
-    || first === 127
-    || (first === 172 && second >= 16 && second <= 31)
-    || (first === 192 && second === 168)
-    || (first === 169 && second === 254)
-    || first === 0;
 }
 
 export default router;
