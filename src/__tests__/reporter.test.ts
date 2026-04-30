@@ -164,6 +164,7 @@ describe('buildDashboard', () => {
     const dashboard = buildDashboard(run, [], [], [risk]);
     expect(dashboard.productRiskSignals).toHaveLength(1);
     expect(dashboard.riskScore).toBeLessThan(100);
+    expect(dashboard.releaseGate.decision).toBeDefined();
   });
 });
 
@@ -178,6 +179,7 @@ describe('BugReporter.renderDashboard', () => {
     expect(output).toContain('QA Copilot');
     expect(output).toContain(run.id);
     expect(output).toContain(run.url);
+    expect(output).toContain('Autonomous Release Gate');
     expect(output).toContain('Login button unresponsive');
     expect(output).toContain('Login flow');
   });

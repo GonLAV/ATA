@@ -10,6 +10,7 @@ import {
 } from '../database/Repository';
 import { buildDashboard, BugReporter } from '../reporters/BugReporter';
 import { RegressionContractBuilder } from '../contracts/RegressionContractBuilder';
+import { ReleaseGateEvaluator } from '../gates/ReleaseGateEvaluator';
 import { observability } from '../observability/Observability';
 import type { CreateRunResponse } from '../types';
 
@@ -177,6 +178,44 @@ router.get('/runs/:id/regression-spec', (req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'text/typescript; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${contract.specFilename}"`);
   res.send(contract.spec);
+});
+
+// ─── GET /api/runs/:id/release-gate ────────────────────────────────────────
+// Evaluate whether the run is safe to ship, warn, or block in CI/CD.
+router.get('/runs/:id/release-gate', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const scenarios = getScenariosByRun(run.id);
+  const bugs = getBugsByRun(run.id);
+  const risks = getRiskSignalsByRun(run.id);
+  const gate = new ReleaseGateEvaluator().evaluate(run, scenarios, bugs, risks);
+  res.json(gate);
+});
+
+// ─── GET /api/runs/:id/release-gate/ci ─────────────────────────────────────
+// CI-friendly endpoint with explicit release decision and desired exit code.
+router.get('/runs/:id/release-gate/ci', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const scenarios = getScenariosByRun(run.id);
+  const bugs = getBugsByRun(run.id);
+  const risks = getRiskSignalsByRun(run.id);
+  const gate = new ReleaseGateEvaluator().evaluate(run, scenarios, bugs, risks);
+  res.status(gate.decision === 'block' ? 409 : 200).json({
+    decision: gate.decision,
+    ciExitCode: gate.ciExitCode,
+    confidence: gate.confidence,
+    summary: gate.summary,
+    requiredActions: gate.requiredActions,
+  });
 });
 
 // ─── GET /api/metrics ───────────────────────────────────────────────────────

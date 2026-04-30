@@ -178,6 +178,7 @@ export interface Dashboard {
   bugs: BugReport[];
   scenarios: TestScenario[];
   productRiskSignals: ProductRiskSignal[];
+  releaseGate: ReleaseGate;
   exploratoryMap?: ExplorationMap;
   coverageAreas: string[];
 }
@@ -194,6 +195,39 @@ export interface RegressionContract {
   sourceRiskCount: number;
   specFilename: string;
   spec: string;
+}
+
+// ─── Autonomous Release Gate ───────────────────────────────────────────────
+
+export type ReleaseGateDecision = 'ship' | 'warn' | 'block';
+
+export interface ReleaseGateThresholds {
+  minRiskScore: number;
+  maxHighSeverityBugs: number;
+  maxHighSeverityRisks: number;
+  maxFailedScenarioRate: number;
+}
+
+export interface ReleaseGateCheck {
+  name: string;
+  passed: boolean;
+  severity: 'info' | 'warning' | 'blocking';
+  observed: string;
+  threshold: string;
+  recommendation: string;
+}
+
+export interface ReleaseGate {
+  runId: string;
+  url: string;
+  evaluatedAt: string;
+  decision: ReleaseGateDecision;
+  ciExitCode: 0 | 1;
+  confidence: number;
+  summary: string;
+  thresholds: ReleaseGateThresholds;
+  checks: ReleaseGateCheck[];
+  requiredActions: string[];
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────

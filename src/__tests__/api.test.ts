@@ -162,6 +162,25 @@ describe('GET /api/runs/:id/regression-spec', () => {
   });
 });
 
+describe('GET /api/runs/:id/release-gate', () => {
+  test('returns the autonomous release gate decision', async () => {
+    const res = await request(app).get('/api/runs/mock-run-id/release-gate');
+    expect(res.status).toBe(200);
+    expect(res.body.decision).toBe('block');
+    expect(res.body).toHaveProperty('checks');
+    expect(res.body).toHaveProperty('requiredActions');
+  });
+});
+
+describe('GET /api/runs/:id/release-gate/ci', () => {
+  test('returns CI-friendly gate status and exit code', async () => {
+    const res = await request(app).get('/api/runs/mock-run-id/release-gate/ci');
+    expect(res.status).toBe(409);
+    expect(res.body.decision).toBe('block');
+    expect(res.body.ciExitCode).toBe(1);
+  });
+});
+
 describe('GET /api/metrics', () => {
   test('returns counters and recent events', async () => {
     const res = await request(app).get('/api/metrics');

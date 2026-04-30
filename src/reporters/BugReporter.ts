@@ -1,4 +1,5 @@
 import { ProductRiskRadar } from '../agents/ProductRiskRadar';
+import { ReleaseGateEvaluator } from '../gates/ReleaseGateEvaluator';
 import type { BugReport, Dashboard, ExplorationMap, ProductRiskSignal, TestRun, TestScenario } from '../types';
 
 /**
@@ -100,6 +101,7 @@ ${bug.actualBehavior}${screenshot}${consoleSection}${networkSection}${stackSecti
 | **Completed** | ${dashboard.completedAt ?? 'N/A'} |
 | **Duration** | ${duration} |
 | **Product Risk Score** | ${dashboard.riskScore}/100 |
+| **Release Gate** | ${dashboard.releaseGate.decision.toUpperCase()} (${dashboard.releaseGate.confidence}% confidence) |
 
 ---
 
@@ -139,6 +141,19 @@ ${routes}
 | Severity | Type | Signal | URL |
 |----------|------|--------|-----|
 ${riskRows}
+
+---
+
+## Autonomous Release Gate
+
+${dashboard.releaseGate.summary}
+
+| Check | Result | Observed | Threshold |
+|-------|--------|----------|-----------|
+${dashboard.releaseGate.checks.map((check) => `| ${check.name} | ${check.passed ? 'pass' : check.severity} | ${check.observed} | ${check.threshold} |`).join('\n')}
+
+Required actions:
+${dashboard.releaseGate.requiredActions.length > 0 ? dashboard.releaseGate.requiredActions.map((action) => `- ${action}`).join('\n') : '- None'}
 
 ---
 
@@ -200,6 +215,7 @@ export function buildDashboard(
 
   const coverageAreas = inferCoverageAreas(scenarios);
   const riskScore = new ProductRiskRadar().score(productRiskSignals);
+  const releaseGate = new ReleaseGateEvaluator().evaluate(run, scenarios, bugs, productRiskSignals);
 
   return {
     runId: run.id,
@@ -218,6 +234,7 @@ export function buildDashboard(
     bugs,
     scenarios,
     productRiskSignals,
+    releaseGate,
     exploratoryMap,
     coverageAreas,
   };

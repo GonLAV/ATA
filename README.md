@@ -25,6 +25,8 @@ qa-copilot/
 │   ├── database/
 │   │   ├── Database.ts       # SQLite adapter + schema
 │   │   └── Repository.ts     # CRUD for runs, scenarios, bugs, risks
+│   ├── gates/
+│   │   └── ReleaseGateEvaluator.ts # CI/CD ship/warn/block release decisions
 │   ├── config/
 │   │   └── Config.ts         # Typed environment configuration
 │   ├── observability/
@@ -68,7 +70,7 @@ POST /api/runs { url }
 
 - **Dynamic behavior by default:** scenarios are inferred from discovered page structure. If `OPENAI_API_KEY` is unavailable, QA Copilot uses a deterministic generator based on live forms, buttons, and links instead of canned tests.
 - **Runtime-resilient SQLite:** Node.js 22+ uses built-in `node:sqlite`; older Node runtimes can use optional `better-sqlite3` when native build tools are available.
-- **Small, testable boundaries:** browser exploration, LLM reasoning, risk analysis, regression contracts, persistence, reporting, config, and observability each live behind separate modules.
+- **Small, testable boundaries:** browser exploration, LLM reasoning, risk analysis, release gates, regression contracts, persistence, reporting, config, and observability each live behind separate modules.
 - **CI/CD-ready observability:** run, scenario, bug, and risk events are exposed through `/api/metrics`. This can later be bridged to OpenTelemetry without rewriting the agent.
 
 ### Next-Level Feature: Product Risk Radar
@@ -82,6 +84,12 @@ Why it matters: SaaS quality failures are not only exceptions. Many revenue-impa
 Bug-to-Regression Contracts turn autonomous findings into durable engineering assets. For every bug and product risk signal, QA Copilot can generate a Playwright spec that replays the discovered scenario, embeds the observed evidence as comments, and is ready to drop into CI.
 
 Why it matters: most QA automation tools stop at a report. Real teams need a way to prevent the same defect from returning. This feature closes the loop from exploration to prevention: AI discovers the issue, QA Copilot writes the regression contract, and engineering can promote it into the test suite with minimal translation work.
+
+### Next-Level Feature: Autonomous Release Gate
+
+Autonomous Release Gate turns QA Copilot evidence into a deterministic `ship`, `warn`, or `block` decision for CI/CD. It evaluates product risk score, high-severity bugs, high-severity risks, failed scenario rate, and run completion status, then returns both human-readable rationale and a CI-friendly exit code.
+
+Why it matters: release meetings often rely on scattered dashboards, partial test logs, and subjective judgment. QA Copilot now gives teams a transparent release policy that can be reviewed by humans and enforced by automation. The tradeoff is intentional: the gate is deterministic rather than LLM-driven so release governance remains auditable and repeatable.
 
 ---
 
@@ -157,6 +165,8 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `GET` | `/api/runs/:id/risks` | Product Risk Radar signals for a run |
 | `GET` | `/api/runs/:id/regression-contract` | JSON metadata plus generated Playwright regression spec |
 | `GET` | `/api/runs/:id/regression-spec` | Raw downloadable Playwright spec |
+| `GET` | `/api/runs/:id/release-gate` | Detailed autonomous release gate decision |
+| `GET` | `/api/runs/:id/release-gate/ci` | CI-friendly release decision and exit code |
 | `GET` | `/api/metrics` | In-process counters and recent QA events |
 | `GET` | `/health` | Health check |
 
@@ -178,6 +188,10 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `STEP_TIMEOUT_MS` | `10000` | Per-action Playwright timeout |
 | `DISCOVERY_PAGE_LIMIT` | `4` | Maximum same-origin pages explored before scenario generation |
 | `MAX_SCENARIOS` | `12` | Reserved scenario generation cap for future queue controls |
+| `RELEASE_GATE_MIN_RISK_SCORE` | `75` | Minimum Product Risk Radar score required to ship |
+| `RELEASE_GATE_MAX_HIGH_SEVERITY_BUGS` | `0` | Maximum critical/high bugs allowed before blocking |
+| `RELEASE_GATE_MAX_HIGH_SEVERITY_RISKS` | `2` | Maximum critical/high product risks before warning |
+| `RELEASE_GATE_MAX_FAILED_SCENARIO_RATE` | `0.25` | Maximum failed scenario ratio before blocking |
 
 ---
 
@@ -201,6 +215,14 @@ Each Product Risk Radar signal includes:
 - **Evidence** — browser-observed proof for the signal
 - **Recommendation** — product/engineering action to reduce the risk
 - **Risk Score** — 0-100 run-level score shown in dashboards and reports
+
+Each Autonomous Release Gate decision includes:
+
+- **Decision** — `ship`, `warn`, or `block`
+- **CI Exit Code** — `0` for ship/warn, `1` for block
+- **Confidence** — 0-100 score based on checks, coverage, and finding volume
+- **Checks** — observed values, thresholds, pass/fail state, and recommendations
+- **Required Actions** — concrete release-readiness work for engineering and QA
 
 ---
 
