@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import type { Page } from 'playwright';
+import { getConfig } from '../config/Config';
 
 /**
  * Captures and stores Playwright page screenshots.
@@ -9,8 +10,9 @@ export class ScreenshotManager {
   private baseDir: string;
 
   constructor(baseDir?: string) {
+    const config = getConfig();
     this.baseDir = path.resolve(
-      baseDir ?? process.env.SCREENSHOTS_DIR ?? './screenshots',
+      baseDir ?? config.screenshotsDir,
     );
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });

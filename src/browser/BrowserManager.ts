@@ -1,4 +1,5 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { getConfig } from '../config/Config';
 
 export interface BrowserConfig {
   headless: boolean;
@@ -15,10 +16,11 @@ export class BrowserManager {
   private config: BrowserConfig;
 
   constructor(config?: Partial<BrowserConfig>) {
+    const appConfig = getConfig();
     this.config = {
-      headless: (process.env.HEADLESS ?? 'true') !== 'false',
-      width: parseInt(process.env.BROWSER_WIDTH ?? '1280', 10),
-      height: parseInt(process.env.BROWSER_HEIGHT ?? '800', 10),
+      headless: appConfig.headless,
+      width: appConfig.browserWidth,
+      height: appConfig.browserHeight,
       ...config,
     };
   }

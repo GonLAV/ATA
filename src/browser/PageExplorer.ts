@@ -53,11 +53,12 @@ export class PageExplorer {
 
     const title = await page.title().catch(() => '');
 
-    const [buttons, links, inputs, forms] = await Promise.all([
+    const [buttons, links, inputs, forms, headings] = await Promise.all([
       this.collectButtons(page),
       this.collectLinks(page),
       this.collectInputs(page),
       this.collectForms(page),
+      this.collectHeadings(page),
     ]);
 
     const screenshotPath = await this.screenshots
@@ -68,11 +69,13 @@ export class PageExplorer {
 
     return {
       url,
+      finalUrl: page.url(),
       title,
       forms,
       inputs,
       buttons,
       links,
+      headings,
       consoleErrors,
       networkErrors,
       screenshotPath,
@@ -179,6 +182,15 @@ export class PageExplorer {
             : undefined,
         };
       });
+    });
+  }
+
+  private async collectHeadings(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      return Array.from(document.querySelectorAll('h1, h2, [role="heading"]'))
+        .map((el) => el.textContent?.trim())
+        .filter((text): text is string => Boolean(text))
+        .slice(0, 12);
     });
   }
 }

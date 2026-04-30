@@ -1,7 +1,7 @@
 /**
  * Tests for Database layer (Repository) using an in-memory SQLite instance.
  */
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 // Use an in-memory database for tests
 process.env.DATABASE_PATH = ':memory:';
@@ -17,12 +17,14 @@ import {
   getScenariosByRun,
   createBugReport,
   getBugsByRun,
+  createProductRiskSignal,
+  getRiskSignalsByRun,
 } from '../database/Repository';
-import type { TestRun, TestScenario, BugReport } from '../types';
+import type { TestRun, TestScenario, BugReport, ProductRiskSignal } from '../types';
 
 function makeRun(overrides: Partial<TestRun> = {}): TestRun {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     url: 'https://example.com',
     status: 'pending',
     startedAt: new Date().toISOString(),
@@ -36,7 +38,7 @@ function makeRun(overrides: Partial<TestRun> = {}): TestRun {
 
 function makeScenario(runId: string, overrides: Partial<TestScenario> = {}): TestScenario {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     runId,
     title: 'Test login',
     description: 'Verify login flow',
@@ -49,7 +51,7 @@ function makeScenario(runId: string, overrides: Partial<TestScenario> = {}): Tes
 
 function makeBug(runId: string, overrides: Partial<BugReport> = {}): BugReport {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     runId,
     title: 'Button not clickable',
     severity: 'high',
@@ -57,6 +59,21 @@ function makeBug(runId: string, overrides: Partial<BugReport> = {}): BugReport {
     reproductionSteps: ['Open page', 'Click submit button'],
     expectedBehavior: 'Form submits',
     actualBehavior: 'Nothing happens',
+    url: 'https://example.com',
+    detectedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeRiskSignal(runId: string, overrides: Partial<ProductRiskSignal> = {}): ProductRiskSignal {
+  return {
+    id: randomUUID(),
+    runId,
+    type: 'dead_interaction',
+    title: 'CTA produced no observable result',
+    severity: 'medium',
+    evidence: ['Clicked #submit', 'URL and DOM did not change'],
+    recommendation: 'Add visible feedback or fix the click handler.',
     url: 'https://example.com',
     detectedAt: new Date().toISOString(),
     ...overrides,
@@ -183,5 +200,21 @@ describe('Repository — Bug Reports', () => {
     const found = getBugsByRun(run.id).find((b) => b.id === bug.id);
     expect(found?.reproductionSteps).toEqual(['Step A', 'Step B', 'Step C']);
     expect(found?.consoleErrors).toEqual(['Uncaught TypeError: Cannot read property']);
+  });
+});
+
+describe('Repository — Product Risk Signals', () => {
+  test('creates and retrieves risk signals by run', () => {
+    const run = makeRun();
+    createRun(run);
+
+    const signal = makeRiskSignal(run.id, { severity: 'high' });
+    createProductRiskSignal(signal);
+
+    const found = getRiskSignalsByRun(run.id);
+    expect(found).toHaveLength(1);
+    expect(found[0].title).toBe(signal.title);
+    expect(found[0].severity).toBe('high');
+    expect(found[0].evidence).toEqual(signal.evidence);
   });
 });

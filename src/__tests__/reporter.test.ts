@@ -1,13 +1,13 @@
 /**
  * Tests for BugReporter — rendering and dashboard building logic.
  */
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { BugReporter, buildDashboard } from '../reporters/BugReporter';
-import type { TestRun, TestScenario, BugReport, Dashboard } from '../types';
+import type { TestRun, TestScenario, BugReport, Dashboard, ProductRiskSignal } from '../types';
 
 function makeRun(overrides: Partial<TestRun> = {}): TestRun {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     url: 'https://demo.example.com',
     status: 'completed',
     startedAt: '2024-01-01T00:00:00.000Z',
@@ -22,7 +22,7 @@ function makeRun(overrides: Partial<TestRun> = {}): TestRun {
 
 function makeBug(runId: string, overrides: Partial<BugReport> = {}): BugReport {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     runId,
     title: 'Login button unresponsive',
     severity: 'high',
@@ -38,13 +38,28 @@ function makeBug(runId: string, overrides: Partial<BugReport> = {}): BugReport {
 
 function makeScenario(runId: string, overrides: Partial<TestScenario> = {}): TestScenario {
   return {
-    id: uuidv4(),
+    id: randomUUID(),
     runId,
     title: 'Login flow',
     description: 'Test user login',
     priority: 'high',
     steps: [],
     status: 'passed',
+    ...overrides,
+  };
+}
+
+function makeRiskSignal(runId: string, overrides: Partial<ProductRiskSignal> = {}): ProductRiskSignal {
+  return {
+    id: randomUUID(),
+    runId,
+    type: 'dead_interaction',
+    title: 'Primary CTA did not respond',
+    severity: 'high',
+    evidence: ['Clicked primary CTA', 'No observable result'],
+    recommendation: 'Add a state change, navigation, or validation feedback.',
+    url: 'https://demo.example.com',
+    detectedAt: '2024-01-01T00:00:20.000Z',
     ...overrides,
   };
 }
@@ -142,6 +157,14 @@ describe('buildDashboard', () => {
     const dashboard = buildDashboard(run, scenarios, []);
     expect(dashboard.skippedScenarios).toBe(1);
   });
+
+  test('includes product risk signals and score', () => {
+    const run = makeRun();
+    const risk = makeRiskSignal(run.id, { severity: 'high' });
+    const dashboard = buildDashboard(run, [], [], [risk]);
+    expect(dashboard.productRiskSignals).toHaveLength(1);
+    expect(dashboard.riskScore).toBeLessThan(100);
+  });
 });
 
 describe('BugReporter.renderDashboard', () => {
@@ -157,6 +180,15 @@ describe('BugReporter.renderDashboard', () => {
     expect(output).toContain(run.url);
     expect(output).toContain('Login button unresponsive');
     expect(output).toContain('Login flow');
+  });
+
+  test('renders Product Risk Radar signals', () => {
+    const run = makeRun();
+    const risk = makeRiskSignal(run.id);
+    const dashboard = buildDashboard(run, [], [], [risk]);
+    const output = BugReporter.renderDashboard(dashboard);
+    expect(output).toContain('Product Risk Radar');
+    expect(output).toContain('Primary CTA did not respond');
   });
 
   test('shows "No bugs detected" when there are no bugs', () => {

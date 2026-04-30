@@ -1,4 +1,5 @@
-import type { BugReport, Dashboard, TestRun, TestScenario } from '../types';
+import { ProductRiskRadar } from '../agents/ProductRiskRadar';
+import type { BugReport, Dashboard, ExplorationMap, ProductRiskSignal, TestRun, TestScenario } from '../types';
 
 /**
  * Generates human-readable bug reports and a summary dashboard.
@@ -78,6 +79,16 @@ ${bug.actualBehavior}${screenshot}${consoleSection}${networkSection}${stackSecti
         ? dashboard.coverageAreas.map((a) => `- ${a}`).join('\n')
         : '- N/A';
 
+    const riskRows = dashboard.productRiskSignals.length > 0
+      ? dashboard.productRiskSignals
+        .map((risk) => `| ${severityEmoji(risk.severity)} ${risk.severity} | ${risk.type} | ${risk.title} | ${risk.url} |`)
+        .join('\n')
+      : '| - | - | No product risk signals detected. | - |';
+
+    const routes = dashboard.exploratoryMap?.routes.length
+      ? dashboard.exploratoryMap.routes.map((route) => `- ${route}`).join('\n')
+      : '- N/A';
+
     return `# 📊 QA Copilot — Test Run Report
 
 | Field | Value |
@@ -88,6 +99,7 @@ ${bug.actualBehavior}${screenshot}${consoleSection}${networkSection}${stackSecti
 | **Started** | ${dashboard.startedAt} |
 | **Completed** | ${dashboard.completedAt ?? 'N/A'} |
 | **Duration** | ${duration} |
+| **Product Risk Score** | ${dashboard.riskScore}/100 |
 
 ---
 
@@ -114,6 +126,19 @@ ${bug.actualBehavior}${screenshot}${consoleSection}${networkSection}${stackSecti
 
 ## Coverage Areas
 ${coverageList}
+
+---
+
+## Exploratory Map
+${routes}
+
+---
+
+## Product Risk Radar
+
+| Severity | Type | Signal | URL |
+|----------|------|--------|-----|
+${riskRows}
 
 ---
 
@@ -158,6 +183,8 @@ export function buildDashboard(
   run: TestRun,
   scenarios: TestScenario[],
   bugs: BugReport[],
+  productRiskSignals: ProductRiskSignal[] = [],
+  exploratoryMap?: ExplorationMap,
 ): Dashboard {
   const severityCounts = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const bug of bugs) {
@@ -172,6 +199,7 @@ export function buildDashboard(
       : undefined;
 
   const coverageAreas = inferCoverageAreas(scenarios);
+  const riskScore = new ProductRiskRadar().score(productRiskSignals);
 
   return {
     runId: run.id,
@@ -186,8 +214,11 @@ export function buildDashboard(
     skippedScenarios: skipped,
     bugsFound: run.bugsFound,
     severityCounts,
+    riskScore,
     bugs,
     scenarios,
+    productRiskSignals,
+    exploratoryMap,
     coverageAreas,
   };
 }
