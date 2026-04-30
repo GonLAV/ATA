@@ -8,6 +8,7 @@ import { LLMClient } from './LLMClient';
 import {
   createRun,
   updateRun,
+  getRun,
   createScenario,
   updateScenario,
   createBugReport,
@@ -157,11 +158,12 @@ export class QAAgent {
       const completedAt = new Date().toISOString();
       updateRun(runId, { status: 'completed', completedAt });
 
+      const dbRun = getRun(runId);
       const finalRun: TestRun = {
         id: runId,
         url,
         status: 'completed',
-        startedAt: snapshot.url, // will be replaced below from DB
+        startedAt: dbRun?.startedAt ?? new Date().toISOString(),
         completedAt,
         totalScenarios: scenarios.length,
         passedScenarios: passed,

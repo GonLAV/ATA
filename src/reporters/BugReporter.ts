@@ -45,10 +45,10 @@ ${bug.description}
 ### Reproduction Steps
 ${steps}
 
-### Expected Behaviour
+### Expected Behavior
 ${bug.expectedBehavior}
 
-### Actual Behaviour
+### Actual Behavior
 ${bug.actualBehavior}${screenshot}${consoleSection}${networkSection}${stackSection}
 `;
   }

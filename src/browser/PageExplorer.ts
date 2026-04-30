@@ -99,7 +99,7 @@ export class PageExplorer {
         if (el.id) return `#${CSS.escape(el.id)}`;
         if (el.getAttribute('data-testid')) return `[data-testid="${el.getAttribute('data-testid')}"]`;
         const text = el.textContent?.trim().slice(0, 40);
-        if (text) return `${el.tagName.toLowerCase()}:has-text("${text.replace(/"/g, '\\"')}")`;
+        if (text) return `${el.tagName.toLowerCase()}:has-text("${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
         return el.tagName.toLowerCase();
       }
     });
@@ -114,7 +114,7 @@ export class PageExplorer {
         href: el.href ?? undefined,
         id: el.id || undefined,
         ariaLabel: el.getAttribute('aria-label') ?? undefined,
-        selector: el.id ? `#${CSS.escape(el.id)}` : `a[href="${el.getAttribute('href')?.replace(/"/g, '\\"')}"]`,
+        selector: el.id ? `#${CSS.escape(el.id)}` : `a[href="${el.getAttribute('href')?.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`,
       }));
     });
   }
@@ -134,7 +134,7 @@ export class PageExplorer {
         selector: el.id
           ? `#${CSS.escape(el.id)}`
           : el.name
-            ? `[name="${el.name.replace(/"/g, '\\"')}"]`
+            ? `[name="${el.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`
             : el.tagName.toLowerCase(),
       }));
     });
@@ -155,7 +155,7 @@ export class PageExplorer {
           selector: el.id
             ? `#${CSS.escape(el.id)}`
             : el.name
-              ? `[name="${el.name.replace(/"/g, '\\"')}"]`
+              ? `[name="${el.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`
               : el.tagName.toLowerCase(),
         }));
 
