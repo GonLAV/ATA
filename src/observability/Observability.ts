@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 
 export type QaEventName =
+  | 'run.queued'
   | 'run.started'
   | 'run.completed'
   | 'run.failed'

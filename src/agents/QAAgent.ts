@@ -23,14 +23,21 @@ import { getConfig } from '../config/Config';
 import { observability } from '../observability/Observability';
 import type {
   ActionObservation,
+  Dashboard,
   ExplorationMap,
   TestRun,
   TestScenario,
   TestStep,
   BugReport,
-  Dashboard,
   PageSnapshot,
 } from '../types';
+
+interface QueuedRun {
+  runId: string;
+  url: string;
+  resolve: (dashboard: Dashboard) => void;
+  reject: (error: unknown) => void;
+}
 
 /**
  * The main QA Agent orchestrator.
@@ -44,7 +51,6 @@ import type {
  *  6. Persist everything and return a Dashboard
  */
 export class QAAgent {
-  private browserManager: BrowserManager;
   private screenshotManager: ScreenshotManager;
   private explorer: PageExplorer;
   private llm: LLMClient;
@@ -52,9 +58,11 @@ export class QAAgent {
   private stepTimeoutMs: number;
   private discoveryPageLimit: number;
   private maxScenarios: number;
+  private maxConcurrentRuns: number;
+  private activeRuns = 0;
+  private runQueue: QueuedRun[] = [];
 
   constructor() {
-    this.browserManager = new BrowserManager();
     this.screenshotManager = new ScreenshotManager();
     this.explorer = new PageExplorer(this.screenshotManager);
     this.llm = new LLMClient();
@@ -63,6 +71,7 @@ export class QAAgent {
     this.stepTimeoutMs = config.stepTimeoutMs;
     this.discoveryPageLimit = config.discoveryPageLimit;
     this.maxScenarios = config.maxScenarios;
+    this.maxConcurrentRuns = config.maxConcurrentRuns;
   }
 
   /**
@@ -73,7 +82,7 @@ export class QAAgent {
     const runId = this.createRunRecord(url);
 
     // Execute asynchronously so the HTTP response returns immediately
-    this.execute(runId, url).catch((err) => {
+    this.enqueueRun(runId, url).catch((err) => {
       console.error(`[QAAgent] Run ${runId} crashed:`, err);
       updateRun(runId, { status: 'failed', completedAt: new Date().toISOString() });
       observability.emit('run.failed', { runId, payload: { error: (err as Error).message } });
@@ -88,7 +97,30 @@ export class QAAgent {
    */
   async runSync(url: string): Promise<Dashboard> {
     const runId = this.createRunRecord(url);
-    return this.execute(runId, url);
+    return this.enqueueRun(runId, url);
+  }
+
+  private enqueueRun(runId: string, url: string): Promise<Dashboard> {
+    return new Promise((resolve, reject) => {
+      this.runQueue.push({ runId, url, resolve, reject });
+      observability.emit('run.queued', { runId, payload: { queueDepth: this.runQueue.length } });
+      this.drainRunQueue();
+    });
+  }
+
+  private drainRunQueue(): void {
+    while (this.activeRuns < this.maxConcurrentRuns && this.runQueue.length > 0) {
+      const nextRun = this.runQueue.shift();
+      if (!nextRun) return;
+
+      this.activeRuns += 1;
+      this.execute(nextRun.runId, nextRun.url)
+        .then(nextRun.resolve, nextRun.reject)
+        .finally(() => {
+          this.activeRuns -= 1;
+          this.drainRunQueue();
+        });
+    }
   }
 
   private createRunRecord(url: string): string {
@@ -113,12 +145,13 @@ export class QAAgent {
     updateRun(runId, { status: 'running' });
     observability.emit('run.started', { runId, payload: { url } });
     console.log(`[QAAgent] Starting run ${runId} for ${url}`);
+    const browserManager = new BrowserManager();
 
     try {
-      await this.browserManager.launch();
+      await browserManager.launch();
 
       // ── Step 1: Explore the page ──
-      const explorationMap = await this.exploreApplication(url);
+      const explorationMap = await this.exploreApplication(browserManager, url);
       const snapshot = explorationMap.snapshots[0];
 
       console.log(
@@ -139,7 +172,7 @@ export class QAAgent {
       }
 
       // ── Step 2: Generate test scenarios ──
-        const rawScenarios = (await this.llm.generateTestScenarios(explorationMap)).slice(0, this.maxScenarios);
+      const rawScenarios = (await this.llm.generateTestScenarios(explorationMap)).slice(0, this.maxScenarios);
       console.log(`[QAAgent] LLM generated ${rawScenarios.length} scenarios`);
 
       const scenarios: TestScenario[] = rawScenarios.map((s) => ({
@@ -162,7 +195,7 @@ export class QAAgent {
       for (const scenario of scenarios) {
         console.log(`[QAAgent] Executing: "${scenario.title}"`);
         observability.emit('scenario.started', { runId, scenarioId: scenario.id, payload: { title: scenario.title } });
-        const result = await this.executeScenario(runId, url, scenario);
+        const result = await this.executeScenario(browserManager, runId, url, scenario);
 
         if (result.bug) {
           createBugReport(result.bug);
@@ -209,12 +242,12 @@ export class QAAgent {
       observability.emit('run.completed', { runId, payload: { scenarios: scenarios.length, bugsFound, riskSignals: allRiskSignals.length } });
       return buildDashboard(finalRun, allScenarios, allBugs, allRiskSignals, explorationMap);
     } finally {
-      await this.browserManager.close();
+      await browserManager.close();
     }
   }
 
-  private async exploreApplication(url: string): Promise<ExplorationMap> {
-    const context = await this.browserManager.newContext();
+  private async exploreApplication(browserManager: BrowserManager, url: string): Promise<ExplorationMap> {
+    const context = await browserManager.newContext();
     const snapshots: PageSnapshot[] = [];
 
     try {
@@ -262,11 +295,12 @@ export class QAAgent {
   // ─── Scenario executor ────────────────────────────────────────────────────
 
   private async executeScenario(
+    browserManager: BrowserManager,
     runId: string,
     baseUrl: string,
     scenario: TestScenario,
   ): Promise<{ passed: boolean; bug?: BugReport; riskSignals: ReturnType<ProductRiskRadar['analyzeScenario']> }> {
-    const context = await this.browserManager.newContext();
+    const context = await browserManager.newContext();
     const page = await context.newPage();
 
     const consoleErrors: string[] = [];

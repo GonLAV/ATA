@@ -194,6 +194,7 @@ curl http://localhost:3000/api/runs/<runId>/dashboard
 | `STEP_TIMEOUT_MS` | `10000` | Per-action Playwright timeout |
 | `DISCOVERY_PAGE_LIMIT` | `4` | Maximum same-origin pages explored before scenario generation |
 | `MAX_SCENARIOS` | `12` | Reserved scenario generation cap for future queue controls |
+| `MAX_CONCURRENT_RUNS` | `1` | Maximum active QA runs per process; additional runs remain queued as `pending` |
 | `ALLOW_PRIVATE_TARGETS` | `false` | Allow testing localhost/private IP targets; enable only in trusted local environments |
 | `RELEASE_GATE_MIN_RISK_SCORE` | `75` | Minimum Product Risk Radar score required to ship |
 | `RELEASE_GATE_MAX_HIGH_SEVERITY_BUGS` | `0` | Maximum critical/high bugs allowed before blocking |
