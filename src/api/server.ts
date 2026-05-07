@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import routes from './routes';
 
 /**
@@ -10,6 +11,10 @@ export function createApp() {
 
   app.use(express.json());
 
+  // Serve the designer UI
+  const publicDir = path.join(__dirname, '../../public');
+  app.use(express.static(publicDir));
+
   // Health check
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'qa-copilot' });
@@ -18,9 +23,9 @@ export function createApp() {
   // API routes
   app.use('/api', routes);
 
-  // 404 handler
-  app.use((_req, res) => {
-    res.status(404).json({ error: 'Not found.' });
+  // SPA fallback — serve index.html for any non-API route
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
   });
 
   return app;

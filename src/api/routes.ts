@@ -11,6 +11,9 @@ import {
 import { buildDashboard, BugReporter } from '../reporters/BugReporter';
 import { RegressionContractBuilder } from '../contracts/RegressionContractBuilder';
 import { observability } from '../observability/Observability';
+import { getActiveAIConfig, setRuntimeAIConfig } from '../config/Config';
+import { PROVIDER_DEFAULTS, PROVIDER_MODELS } from '../agents/AIProviderClient';
+import type { AIProvider } from '../agents/AIProviderClient';
 import type { CreateRunResponse } from '../types';
 
 const router = Router();
@@ -180,9 +183,53 @@ router.get('/runs/:id/regression-spec', (req: Request, res: Response): void => {
 });
 
 // ─── GET /api/metrics ───────────────────────────────────────────────────────
-// Lightweight observability endpoint for local runs and CI smoke checks.
 router.get('/metrics', (_req: Request, res: Response): void => {
   res.json(observability.metrics());
+});
+
+// ─── GET /api/ai-config ──────────────────────────────────────────────────────
+// Returns the current AI provider configuration (without the API key).
+router.get('/ai-config', (_req: Request, res: Response): void => {
+  const config = getActiveAIConfig();
+  res.json({
+    provider: config.provider,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    hasApiKey: Boolean(config.apiKey && config.apiKey.length > 4),
+    providers: Object.entries(PROVIDER_DEFAULTS).map(([id, def]) => ({
+      id,
+      label: def.label,
+      defaultModel: def.model,
+      defaultBaseUrl: def.baseUrl,
+      models: PROVIDER_MODELS[id as AIProvider],
+    })),
+  });
+});
+
+// ─── PUT /api/ai-config ──────────────────────────────────────────────────────
+// Update the active AI provider config at runtime (takes effect on next run).
+const AIConfigSchema = z.object({
+  provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'ollama', 'custom']).optional(),
+  apiKey: z.string().optional(),
+  model: z.string().min(1).optional(),
+  baseUrl: z.string().optional(),
+});
+
+router.put('/ai-config', (req: Request, res: Response): void => {
+  const parsed = AIConfigSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0].message });
+    return;
+  }
+  setRuntimeAIConfig(parsed.data);
+  const updated = getActiveAIConfig();
+  res.json({
+    ok: true,
+    provider: updated.provider,
+    model: updated.model,
+    baseUrl: updated.baseUrl,
+    hasApiKey: Boolean(updated.apiKey && updated.apiKey.length > 4),
+  });
 });
 
 export default router;

@@ -172,8 +172,9 @@ describe('GET /api/metrics', () => {
 });
 
 describe('GET /undefined-route', () => {
-  test('returns 404', async () => {
+  test('returns 200 (SPA fallback serves index.html)', async () => {
     const res = await request(app).get('/unknown/path');
-    expect(res.status).toBe(404);
+    // The SPA catch-all now serves index.html for unmatched routes.
+    expect(res.status).toBe(200);
   });
 });

@@ -4,7 +4,7 @@ import type { Page, Request, Response } from 'playwright';
 import { BrowserManager } from '../browser/BrowserManager';
 import { PageExplorer } from '../browser/PageExplorer';
 import { ScreenshotManager } from '../browser/ScreenshotManager';
-import { LLMClient } from './LLMClient';
+import { AIProviderClient } from './AIProviderClient';
 import { ProductRiskRadar } from './ProductRiskRadar';
 import {
   createRun,
@@ -19,7 +19,7 @@ import {
   getRiskSignalsByRun,
 } from '../database/Repository';
 import { buildDashboard } from '../reporters/BugReporter';
-import { getConfig } from '../config/Config';
+import { getConfig, getActiveAIConfig } from '../config/Config';
 import { observability } from '../observability/Observability';
 import type {
   ActionObservation,
@@ -47,7 +47,7 @@ export class QAAgent {
   private browserManager: BrowserManager;
   private screenshotManager: ScreenshotManager;
   private explorer: PageExplorer;
-  private llm: LLMClient;
+  private llm: AIProviderClient;
   private riskRadar: ProductRiskRadar;
   private stepTimeoutMs: number;
   private discoveryPageLimit: number;
@@ -57,7 +57,7 @@ export class QAAgent {
     this.browserManager = new BrowserManager();
     this.screenshotManager = new ScreenshotManager();
     this.explorer = new PageExplorer(this.screenshotManager);
-    this.llm = new LLMClient();
+    this.llm = new AIProviderClient(getActiveAIConfig());
     this.riskRadar = new ProductRiskRadar();
     const config = getConfig();
     this.stepTimeoutMs = config.stepTimeoutMs;
@@ -70,6 +70,8 @@ export class QAAgent {
    * Returns the run ID so callers can poll for results asynchronously.
    */
   async startRun(url: string): Promise<string> {
+    // Refresh AI client on each run to pick up any runtime config changes
+    this.llm = new AIProviderClient(getActiveAIConfig());
     const runId = this.createRunRecord(url);
 
     // Execute asynchronously so the HTTP response returns immediately
