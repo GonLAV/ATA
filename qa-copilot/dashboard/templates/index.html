@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QA Copilot Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d0f1a;
+      --surface: #151825;
+      --surface2: #1c2030;
+      --border: #252840;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --accent-soft: rgba(99,102,241,0.12);
+      --critical: #ef4444; --critical-soft: rgba(239,68,68,0.12);
+      --high: #f97316;     --high-soft: rgba(249,115,22,0.12);
+      --medium: #eab308;   --medium-soft: rgba(234,179,8,0.12);
+      --low: #22c55e;      --low-soft: rgba(34,197,94,0.12);
+      --healthy: #22c55e;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.9rem 1.5rem; display: flex; align-items: center; gap: 1rem; position: sticky; top: 0; z-index: 50; }
+    .logo { font-size: 1.1rem; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; }
+    .logo-sub { color: var(--muted); font-size: 0.78rem; font-weight: 400; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--low); box-shadow: 0 0 6px var(--low); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    main { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+
+    /* ── Cards ─────────────────────────────────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+    .card-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .card-title .badge-num { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 0.05rem 0.45rem; font-size: 0.7rem; }
+
+    /* ── Form ──────────────────────────────────────────────────── */
+    .run-form { display: flex; gap: 0.75rem; }
+    .run-form input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 1rem; color: var(--text); font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+    .run-form input:focus { border-color: var(--accent); }
+    .run-form input::placeholder { color: var(--muted); }
+
+    /* ── Buttons ────────────────────────────────────────────────── */
+    .btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0.55rem 1.2rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.18s, transform 0.1s; white-space: nowrap; }
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); opacity: 1; }
+
+    /* ── Pills ─────────────────────────────────────────────────── */
+    .pill { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pill-pending   { background: rgba(100,116,139,0.15); color: var(--muted); }
+    .pill-running   { background: var(--accent-soft); color: var(--accent); }
+    .pill-completed { background: var(--low-soft); color: var(--low); }
+    .pill-failed    { background: var(--critical-soft); color: var(--critical); }
+    .pill-critical  { background: var(--critical-soft); color: var(--critical); }
+    .pill-high      { background: var(--high-soft); color: var(--high); }
+    .pill-medium    { background: var(--medium-soft); color: var(--medium); }
+    .pill-low       { background: var(--low-soft); color: var(--low); }
+    .pill-healthy   { background: var(--low-soft); color: var(--low); }
+    .pill-degraded  { background: var(--medium-soft); color: var(--medium); }
+    .pill-broken    { background: var(--high-soft); color: var(--high); }
+    .pill-type      { background: var(--accent-soft); color: var(--accent); }
+    .pill-persona   { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+    /* ── Stats grid ─────────────────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; }
+    .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem; text-align: center; }
+    .stat-num { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-num.critical { color: var(--critical); }
+    .stat-num.high     { color: var(--high); }
+    .stat-num.medium   { color: var(--medium); }
+    .stat-num.low      { color: var(--low); }
+
+    /* ── Table ──────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 0.7rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--accent-soft); cursor: pointer; }
+    .url-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 0.8rem; }
+
+    /* ── Health indicator ───────────────────────────────────────── */
+    .health-big { font-size: 2rem; font-weight: 900; letter-spacing: -0.03em; }
+    .health-healthy  { color: var(--low); }
+    .health-degraded { color: var(--medium); }
+    .health-broken   { color: var(--high); }
+    .health-critical { color: var(--critical); }
+
+    /* ── Bug cards ──────────────────────────────────────────────── */
+    .bug-card { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 0.6rem; transition: border-left-color 0.2s; }
+    .bug-card.critical { border-left-color: var(--critical); }
+    .bug-card.high     { border-left-color: var(--high); }
+    .bug-card.medium   { border-left-color: var(--medium); }
+    .bug-card.low      { border-left-color: var(--low); }
+    .bug-title { font-weight: 600; font-size: 0.9rem; margin: 0.4rem 0; }
+    .bug-url { font-family: monospace; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bug-field { font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.2rem; }
+    .bug-field strong { color: var(--text); }
+    details summary { cursor: pointer; font-size: 0.75rem; color: var(--accent); margin-top: 0.5rem; user-select: none; }
+    details[open] summary { margin-bottom: 0.5rem; }
+    details pre { background: #0a0c14; padding: 0.7rem; border-radius: 6px; font-size: 0.72rem; line-height: 1.5; overflow: auto; color: #94a3b8; }
+    details img { max-width: 100%; border-radius: 6px; margin-top: 0.4rem; border: 1px solid var(--border); }
+
+    /* ── Persona grid ───────────────────────────────────────────── */
+    .persona-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+    .persona-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .persona-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .persona-stat { font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; padding: 0.15rem 0; border-bottom: 1px solid var(--border); }
+    .persona-stat:last-child { border-bottom: none; }
+    .persona-stat span { color: var(--text); font-weight: 600; }
+
+    /* ── Divergence ─────────────────────────────────────────────── */
+    .divergence-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.5rem; font-size: 0.8rem; }
+    .divergence-card.high   { border-left: 3px solid var(--high); }
+    .divergence-card.medium { border-left: 3px solid var(--medium); }
+
+    /* ── Page map (simple tree) ─────────────────────────────────── */
+    .page-map { font-family: monospace; font-size: 0.75rem; line-height: 1.7; max-height: 280px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; }
+    .page-map .type-badge { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 0.35rem; font-size: 0.65rem; margin-left: 0.3rem; }
+
+    /* ── Tabs ───────────────────────────────────────────────────── */
+    .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .tab { padding: 0.45rem 0.9rem; font-size: 0.8rem; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); transition: color 0.2s, border-color 0.2s; }
+    .tab.active { border-bottom-color: var(--accent); color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Filter bar ─────────────────────────────────────────────── */
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.6rem; color: var(--text); font-size: 0.8rem; outline: none; }
+    .filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent); }
+
+    /* ── Progress bar ───────────────────────────────────────────── */
+    .progress-bar { height: 4px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 0.5rem; }
+    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.5s; }
+
+    /* ── Toast ──────────────────────────────────────────────────── */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 1.1rem; font-size: 0.85rem; z-index: 200; opacity: 0; transform: translateY(8px); transition: all 0.25s; pointer-events: none; max-width: 320px; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Spinner ────────────────────────────────────────────────── */
+    .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Misc ───────────────────────────────────────────────────── */
+    .back-link { color: var(--muted); font-size: 0.82rem; cursor: pointer; margin-bottom: 1rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+    .back-link:hover { color: var(--text); }
+    .empty-state { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; }
+    .summary-text { font-size: 0.875rem; line-height: 1.75; color: #94a3b8; }
+    .rec-list { list-style: none; margin-top: 0.75rem; }
+    .rec-list li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; display: flex; gap: 0.5rem; align-items: flex-start; }
+    .rec-list li:last-child { border-bottom: none; }
+    .rec-icon { color: var(--accent); font-weight: 700; flex-shrink: 0; }
+    .ci-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.75rem; font-family: monospace; }
+
+    @media (max-width: 640px) {
+      main { padding: 0.75rem; }
+      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">⚡ QA Copilot</div>
+    <div class="logo-sub">Autonomous AI QA Testing Agent</div>
+  </div>
+  <div class="header-right">
+    <div class="live-dot" title="Live"></div>
+    <span style="color:var(--muted);font-size:0.75rem;" id="last-refresh">—</span>
+    <a href="/api/docs" target="_blank" class="btn btn-ghost btn-sm">API Docs</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── New session ──────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">New Test Session</div>
+    <div class="run-form">
+      <input id="url-input" type="url" placeholder="https://app.example.com" autocomplete="off" />
+      <button class="btn" id="start-btn" onclick="startSession()">▶ Run QA</button>
+    </div>
+    <div id="form-msg" style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted);"></div>
+  </div>
+
+  <!-- ── Sessions panel ──────────────────────────────────────────── -->
+  <div id="sessions-panel">
+    <div class="card">
+      <div class="card-title">
+        Sessions
+        <button class="btn btn-ghost btn-sm" onclick="loadSessions()" style="margin-left:auto;">↻ Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Target URL</th>
+            <th>Status</th>
+            <th>Health</th>
+            <th>Bugs</th>
+            <th>Created</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="sessions-body">
+            <tr><td colspan="6" class="empty-state">Loading sessions…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Report panel ─────────────────────────────────────────────── -->
+  <div id="report-panel" style="display:none;">
+    <div class="back-link" onclick="showSessions()">← All sessions</div>
+
+    <!-- Health + stats -->
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;gap:2rem;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:0.7rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.07em;margin-bottom:0.3rem;">Overall Health</div>
+          <div class="health-big" id="rpt-health">—</div>
+          <div id="rpt-gate" style="margin-top:0.4rem;"></div>
+        </div>
+        <div style="flex:1;">
+          <div class="stats-grid" id="stats-grid"></div>
+        </div>
+      </div>
+      <div id="rpt-coverage" style="margin-top:0.75rem;font-size:0.78rem;color:var(--muted);"></div>
+    </div>
+
+    <!-- CI export links -->
+    <div class="card">
+      <div class="card-title">CI/CD Export</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" id="ci-links"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="card" style="padding-bottom:0.5rem;">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('bugs')">Bugs</div>
+        <div class="tab" onclick="switchTab('personas')">Persona Engine</div>
+        <div class="tab" onclick="switchTab('pages')">Page Map</div>
+        <div class="tab" onclick="switchTab('summary')">Executive Summary</div>
+      </div>
+
+      <!-- Bugs tab -->
+      <div class="tab-panel active" id="tab-bugs">
+        <div class="filter-bar">
+          <select id="sev-filter" onchange="applyFilters()">
+            <option value="">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="type-filter" onchange="applyFilters()">
+            <option value="">All types</option>
+            <option value="console_error">Console Error</option>
+            <option value="api_error">API Error</option>
+            <option value="nav_failure">Nav Failure</option>
+            <option value="ux_issue">UX Issue</option>
+            <option value="accessibility">Accessibility</option>
+            <option value="performance">Performance</option>
+            <option value="security">Security</option>
+          </select>
+          <select id="persona-filter" onchange="applyFilters()">
+            <option value="">All personas</option>
+            <option value="Explorer">Explorer</option>
+            <option value="Skeptic">Skeptic</option>
+            <option value="Rusher">Rusher</option>
+          </select>
+          <input id="search-filter" type="search" placeholder="Search bugs…" oninput="applyFilters()" style="min-width:160px;" />
+          <span id="filter-count" style="margin-left:auto;color:var(--muted);font-size:0.75rem;"></span>
+        </div>
+        <div id="bug-list"></div>
+      </div>
+
+      <!-- Persona Engine tab -->
+      <div class="tab-panel" id="tab-personas">
+        <div class="persona-grid" id="persona-grid"></div>
+        <div id="divergences" style="margin-top:1.25rem;"></div>
+      </div>
+
+      <!-- Page Map tab -->
+      <div class="tab-panel" id="tab-pages">
+        <div class="page-map" id="page-map-content"></div>
+      </div>
+
+      <!-- Summary tab -->
+      <div class="tab-panel" id="tab-summary">
+        <p id="rpt-summary" class="summary-text"></p>
+        <ul class="rec-list" id="rpt-recs"></ul>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ─── State ───────────────────────────────────────────────────────── */
+let currentSessionId = null;
+let allBugs = [];
+let activePollers = {};   // sessionId → intervalId
+
+/* ─── Utilities ───────────────────────────────────────────────────── */
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, opts);
+  if (res.status === 202) return null;   // session still running
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || res.statusText);
+  }
+  return res.json();
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toast(msg, dur = 3200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const panels = ['bugs','personas','pages','summary'];
+    t.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + name);
+  });
+}
+
+/* ─── Sessions list ───────────────────────────────────────────────── */
+async function loadSessions() {
+  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+  try {
+    const sessions = await api('/sessions?limit=30');
+    const tbody = document.getElementById('sessions-body');
+    if (!sessions || !sessions.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No sessions yet. Enter a URL above to start.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sessions.map(s => {
+      const isComplete = s.status === 'completed';
+      const isRunning  = s.status === 'running' || s.status === 'pending';
+      return `<tr onclick="${isComplete ? `openReport('${s.id}')` : ''}">
+        <td class="url-cell" title="${esc(s.url)}">${esc(s.url)}</td>
+        <td><span class="pill pill-${s.status}">${s.status}${isRunning ? ' <span class="spinner"></span>' : ''}</span></td>
+        <td id="health-cell-${s.id}">—</td>
+        <td id="bugs-cell-${s.id}">—</td>
+        <td style="color:var(--muted);font-size:0.75rem;white-space:nowrap;">${new Date(s.created_at).toLocaleString()}</td>
+        <td>${isComplete ? `<button class="btn btn-sm" onclick="event.stopPropagation();openReport('${s.id}')">View</button>` :
+             isRunning   ? `<button class="btn btn-ghost btn-sm" disabled>Running…</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+
+    // Fill health + bug count for completed sessions
+    sessions.filter(s => s.status === 'completed').forEach(async s => {
+      try {
+        const r = await api(`/sessions/${s.id}/report`);
+        if (!r) return;
+        const hCell = document.getElementById(`health-cell-${s.id}`);
+        const bCell = document.getElementById(`bugs-cell-${s.id}`);
+        if (hCell) hCell.innerHTML = `<span class="pill pill-${r.overall_health||'healthy'}">${r.overall_health||'?'}</span>`;
+        if (bCell) bCell.textContent = (r.bugs || []).length;
+      } catch {}
+    });
+
+    // Auto-start pollers for running sessions
+    sessions.filter(s => s.status === 'running' || s.status === 'pending').forEach(s => {
+      if (!activePollers[s.id]) pollSession(s.id);
+    });
+  } catch(e) {
+    toast('Error loading sessions: ' + e.message);
+  }
+}
+
+/* ─── Start session ───────────────────────────────────────────────── */
+async function startSession() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { toast('Please enter a URL'); return; }
+  const btn = document.getElementById('start-btn');
+  const msg = document.getElementById('form-msg');
+  btn.disabled = true;
+  msg.innerHTML = '<span class="spinner"></span> Creating session…';
+  try {
+    const session = await api('/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    msg.textContent = `Session ${session.id.slice(0,8)}… started — 3 AI personas exploring in parallel.`;
+    toast('Session started! Auto-refreshing every 15s.');
+    await loadSessions();
+    pollSession(session.id);
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    toast('Failed to start: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ─── Auto-poll ───────────────────────────────────────────────────── */
+function pollSession(id, intervalMs = 15_000) {
+  if (activePollers[id]) return;
+  activePollers[id] = setInterval(async () => {
+    try {
+      const s = await api(`/sessions/${id}`);
+      if (s.status === 'completed' || s.status === 'failed') {
+        clearInterval(activePollers[id]);
+        delete activePollers[id];
+        await loadSessions();
+        toast(`Session ${s.status === 'completed' ? 'complete ✓' : 'failed ✗'}`);
+      }
+    } catch {}
+  }, intervalMs);
+}
+
+/* ─── Open report ─────────────────────────────────────────────────── */
+async function openReport(id) {
+  currentSessionId = id;
+  try {
+    const [report, bugs, runs, pageMap] = await Promise.all([
+      api(`/sessions/${id}/report`),
+      api(`/sessions/${id}/bugs`),
+      api(`/sessions/${id}/test-runs`),
+      api(`/sessions/${id}/page-map`),
+    ]);
+    if (!report) { toast('Report not ready yet'); return; }
+    allBugs = bugs || [];
+    renderReport(report, allBugs, runs || [], pageMap || {});
+    document.getElementById('sessions-panel').style.display = 'none';
+    document.getElementById('report-panel').style.display = 'block';
+    window.scrollTo(0, 0);
+  } catch(e) {
+    toast('Error loading report: ' + e.message);
+  }
+}
+
+function showSessions() {
+  document.getElementById('report-panel').style.display = 'none';
+  document.getElementById('sessions-panel').style.display = 'block';
+  currentSessionId = null;
+}
+
+/* ─── Render report ───────────────────────────────────────────────── */
+function renderReport(report, bugs, runs, pageMap) {
+  const health = report.overall_health || 'healthy';
+  const hEl = document.getElementById('rpt-health');
+  hEl.textContent = health.toUpperCase();
+  hEl.className = `health-big health-${health}`;
+
+  // CI gate indicator
+  const gateEl = document.getElementById('rpt-gate');
+  const score = report.score || {};
+  const gateCol = health === 'healthy' ? 'var(--low)' : health === 'degraded' ? 'var(--medium)' : 'var(--critical)';
+  gateEl.innerHTML = `<span style="font-size:0.75rem;color:${gateCol};">CI Gate: ${health === 'healthy' ? '✓ PASS' : health === 'degraded' ? '⚠ WARN' : '✗ FAIL'}</span>`;
+
+  // Stats
+  const sc = score.by_severity || {};
+  const stats = report.stats || {};
+  document.getElementById('stats-grid').innerHTML = [
+    { num: bugs.length, label: 'Total Bugs', cls: '' },
+    { num: sc.critical || 0, label: 'Critical', cls: 'critical' },
+    { num: sc.high || 0, label: 'High', cls: 'high' },
+    { num: sc.medium || 0, label: 'Medium', cls: 'medium' },
+    { num: stats.pages_visited || 0, label: 'Pages Visited', cls: '' },
+    { num: stats.console_errors || 0, label: 'Console Errors', cls: '' },
+    { num: stats.network_failures || 0, label: 'API Failures', cls: '' },
+    { num: score.total_score || 0, label: 'Risk Score', cls: '' },
+  ].map(s => `
+    <div class="stat">
+      <div class="stat-num ${s.cls}">${s.num}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>`).join('');
+
+  document.getElementById('rpt-coverage').textContent = report.test_coverage_assessment || '';
+
+  // CI export links
+  const sid = currentSessionId;
+  document.getElementById('ci-links').innerHTML = [
+    { label: 'JUnit XML', href: `/api/sessions/${sid}/export/junit` },
+    { label: 'SARIF', href: `/api/sessions/${sid}/export/sarif` },
+    { label: 'Badge JSON', href: `/api/sessions/${sid}/export/badge` },
+    { label: 'MD Summary', href: `/api/sessions/${sid}/export/summary` },
+    { label: 'CI Gate', href: `/api/sessions/${sid}/export/gate` },
+  ].map(l => `<a href="${l.href}" target="_blank" class="ci-badge">⬇ ${l.label}</a>`).join('');
+
+  // Summary tab
+  document.getElementById('rpt-summary').textContent = report.executive_summary || '';
+  document.getElementById('rpt-recs').innerHTML = (report.top_recommendations || [])
+    .map(r => `<li><span class="rec-icon">→</span>${esc(r)}</li>`).join('');
+
+  // Personas
+  renderPersonas(report.persona_analysis || {});
+
+  // Page map
+  renderPageMap(pageMap);
+
+  // Bugs
+  renderBugs(bugs);
+}
+
+/* ─── Bugs ────────────────────────────────────────────────────────── */
+function applyFilters() {
+  const sev  = document.getElementById('sev-filter').value;
+  const type = document.getElementById('type-filter').value;
+  const persona = document.getElementById('persona-filter').value;
+  const q    = document.getElementById('search-filter').value.toLowerCase();
+
+  let filtered = allBugs.filter(b => {
+    if (sev && b.severity !== sev) return false;
+    if (type && b.error_type !== type) return false;
+    if (persona && b.persona_name !== persona) return false;
+    if (q && !(b.title + b.description + b.url_at_error).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  renderBugs(filtered);
+}
+
+function renderBugs(bugs) {
+  document.getElementById('filter-count').textContent = `${bugs.length} bug${bugs.length !== 1 ? 's' : ''}`;
+  if (!bugs.length) {
+    document.getElementById('bug-list').innerHTML =
+      '<div class="empty-state">No bugs match the current filters.</div>';
+    return;
+  }
+  const order = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...bugs].sort((a, b) => (order[a.severity] || 3) - (order[b.severity] || 3));
+  document.getElementById('bug-list').innerHTML = sorted.map(bug => `
+    <div class="bug-card ${esc(bug.severity)}">
+      <div style="display:flex;flex-wrap:wrap;gap:0.3rem;align-items:center;">
+        <span class="pill pill-${esc(bug.severity)}">${esc(bug.severity)}</span>
+        ${bug.error_type ? `<span class="pill pill-type">${esc(bug.error_type)}</span>` : ''}
+        ${bug.persona_name ? `<span class="pill pill-persona">${esc(bug.persona_name)}</span>` : ''}
+      </div>
+      <div class="bug-title">${esc(bug.title)}</div>
+      <div class="bug-url">${esc(bug.url_at_error || '')}</div>
+      <div class="bug-field"><strong>Expected:</strong> ${esc(bug.expected_behavior)}</div>
+      <div class="bug-field"><strong>Actual:</strong> ${esc(bug.actual_behavior)}</div>
+      ${bug.reproduction_steps && bug.reproduction_steps.length ? `
+        <details>
+          <summary>Steps (${bug.reproduction_steps.length})</summary>
+          <pre>${bug.reproduction_steps.map((s,i)=>`${i+1}. ${esc(s)}`).join('\n')}</pre>
+        </details>` : ''}
+      ${bug.screenshot_path ? `
+        <details>
+          <summary>Screenshot</summary>
+          <img loading="lazy"
+               src="/api/sessions/${currentSessionId}/bugs/${esc(bug.id)}/screenshot"
+               alt="Screenshot of bug" />
+        </details>` : ''}
+    </div>`).join('');
+}
+
+/* ─── Persona Engine ──────────────────────────────────────────────── */
+function renderPersonas(pa) {
+  const graphs = pa.persona_graphs || {};
+  const icons = { Explorer: '🔍', Skeptic: '🛡', Rusher: '⚡' };
+  document.getElementById('persona-grid').innerHTML = Object.entries(graphs).map(([name, g]) => `
+    <div class="persona-card">
+      <div class="persona-name">${icons[name] || '👤'} ${name}</div>
+      <div class="persona-stat">Pages reached <span>${g.pages_reachable}</span></div>
+      <div class="persona-stat">Transitions <span>${g.transitions}</span></div>
+      <div class="persona-stat">Blocked paths <span>${g.blocked}</span></div>
+      ${g.most_visited && g.most_visited.length ? `
+      <details style="margin-top:0.5rem;">
+        <summary>Top visited</summary>
+        <pre>${g.most_visited.map(u => u.replace(/^https?:\/\/[^/]+/,'')||'/').join('\n')}</pre>
+      </details>` : ''}
+    </div>`).join('');
+
+  const divs = pa.divergences || [];
+  if (divs.length) {
+    document.getElementById('divergences').innerHTML =
+      `<div class="card-title" style="margin-bottom:0.75rem;">
+         Persona Divergences <span class="badge-num">${divs.length}</span>
+       </div>` +
+      divs.map(d => `
+        <div class="divergence-card ${d.severity}">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.3rem;">
+            <span class="pill pill-${d.severity}">${d.severity}</span>
+            <code style="font-size:0.72rem;color:var(--muted);">${esc(d.url.replace(/^https?:\/\/[^/]+/,''))}</code>
+          </div>
+          <div style="font-size:0.8rem;color:#94a3b8;">${esc(d.implication)}</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.25rem;">
+            Reached by: ${d.reachable_by.join(', ')} &nbsp;|&nbsp; Not by: ${d.unreachable_by.join(', ')}
+          </div>
+        </div>`).join('');
+  } else {
+    document.getElementById('divergences').innerHTML =
+      '<div class="empty-state">No significant persona divergences detected.</div>';
+  }
+}
+
+/* ─── Page Map ────────────────────────────────────────────────────── */
+function renderPageMap(pageMap) {
+  const nodes = pageMap.nodes || [];
+  if (!nodes.length) {
+    document.getElementById('page-map-content').innerHTML =
+      '<span style="color:var(--muted)">No pages discovered yet.</span>';
+    return;
+  }
+  const typeIcon = { login: '🔐', signup: '📝', dashboard: '📊', form: '📋', landing: '🏠', settings: '⚙️', error: '❌', other: '📄' };
+  document.getElementById('page-map-content').innerHTML = nodes
+    .sort((a, b) => (a.load_time_ms||0) - (b.load_time_ms||0))
+    .map(n => {
+      const path = (n.url || '').replace(/^https?:\/\/[^/]+/, '') || '/';
+      const icon = typeIcon[n.page_type] || '📄';
+      const loadCol = (n.load_time_ms||0) > 3000 ? 'var(--high)' : (n.load_time_ms||0) > 1500 ? 'var(--medium)' : 'var(--low)';
+      return `<div>${icon} <a href="${esc(n.url)}" target="_blank" style="color:var(--text);">${esc(path)}</a> <span class="type-badge">${esc(n.page_type||'?')}</span> <span style="color:${loadCol};font-size:0.7rem;margin-left:0.3rem;">${n.load_time_ms ? n.load_time_ms.toFixed(0)+'ms' : ''}</span></div>`;
+    }).join('');
+}
+
+/* ─── Init ────────────────────────────────────────────────────────── */
+loadSessions();
+setInterval(loadSessions, 30_000);
+</script>
+</body>
+</html>

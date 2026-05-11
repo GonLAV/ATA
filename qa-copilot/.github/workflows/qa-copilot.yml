@@ -1,0 +1,118 @@
+name: QA Copilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL to test"
+        required: true
+        default: "https://your-staging-app.example.com"
+  schedule:
+    - cron: "0 6 * * *"   # Daily at 06:00 UTC
+
+jobs:
+  qa-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: qa-copilot
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install chromium --with-deps
+
+      - name: Start QA Copilot server
+        working-directory: qa-copilot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HEADLESS: "true"
+        run: |
+          PYTHONPATH=. uvicorn api.main:app --host 0.0.0.0 --port 8000 &
+          sleep 4
+          curl -sf http://localhost:8000/health
+
+      - name: Run QA session
+        id: qa_run
+        working-directory: qa-copilot
+        env:
+          TARGET_URL: ${{ github.event.inputs.target_url || 'https://your-staging-app.example.com' }}
+        run: |
+          SESSION=$(curl -sf -X POST http://localhost:8000/api/sessions \
+            -H "Content-Type: application/json" \
+            -d "{\"url\": \"$TARGET_URL\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          echo "session_id=$SESSION" >> $GITHUB_OUTPUT
+          echo "Started session: $SESSION"
+
+          # Poll until complete (max 20 minutes)
+          for i in $(seq 1 80); do
+            STATUS=$(curl -sf http://localhost:8000/api/sessions/$SESSION | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+            echo "[$i] Status: $STATUS"
+            if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then break; fi
+            sleep 15
+          done
+
+      - name: Export JUnit results
+        working-directory: qa-copilot
+        run: |
+          PYTHONPATH=. python -m cicd.exporter \
+            --session ${{ steps.qa_run.outputs.session_id }} \
+            --format junit \
+            --out results.xml
+
+      - name: Export GitHub Summary
+        working-directory: qa-copilot
+        run: |
+          PYTHONPATH=. python -m cicd.exporter \
+            --session ${{ steps.qa_run.outputs.session_id }} \
+            --format summary >> $GITHUB_STEP_SUMMARY
+
+      - name: Export SARIF
+        working-directory: qa-copilot
+        run: |
+          PYTHONPATH=. python -m cicd.exporter \
+            --session ${{ steps.qa_run.outputs.session_id }} \
+            --format sarif \
+            --out results.sarif.json
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-copilot-results
+          path: |
+            qa-copilot/results.xml
+            qa-copilot/results.sarif.json
+            qa-copilot/screenshots/
+
+      - name: Publish JUnit test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: qa-copilot/results.xml
+          check_name: "QA Copilot Results"
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: qa-copilot/results.sarif.json
+          category: qa-copilot
+
+      - name: CI Gate check
+        working-directory: qa-copilot
+        run: |
+          PYTHONPATH=. python -m cicd.exporter \
+            --session ${{ steps.qa_run.outputs.session_id }} \
+            --format badge
+          # Exit with appropriate code
+          PYTHONPATH=. python -m cicd.exporter \
+            --session ${{ steps.qa_run.outputs.session_id }} \
+            --format junit > /dev/null
