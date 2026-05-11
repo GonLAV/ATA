@@ -1,14 +1,12 @@
 """
 PersonaExplorer — drives one AI persona through a web application.
 
-Improvements over v1:
-  • Uses updated chain-of-thought prompts
-  • Passes previously-found bugs to the AI to suppress duplicates
-  • Selector recovery via AI when primary selector fails
-  • Dedicated accessibility audit pass per page
-  • ActionValidator filters false positives before storing
-  • Web Vitals captured and checked per page
-  • Navigation target prioritization (AI assigns priority scores)
+Upgrades:
+  • EventEmitter integration — every significant action is broadcast live
+  • Claude Vision analysis — screenshots sent to vision model for visual bugs
+  • Cancellation checks — respects session.status == "cancelling"
+  • Token tracking — session_id passed to AI calls
+  • visual_quality stored on page nodes
 """
 from __future__ import annotations
 
@@ -26,15 +24,17 @@ from ai.prompts import (
     selector_recovery_prompt,
     accessibility_audit_prompt,
 )
+from agent.events import EventEmitter
 from agent.validator import ActionValidator
+from agent.vision import analyse_screenshot
 from browser.driver import BrowserDriver
 from config import settings
 from personas.engine import PersonaEngine
 
 logger = logging.getLogger(__name__)
 
-# Max consecutive selector failures before aborting a scenario
 _MAX_SELECTOR_FAILURES = 3
+_CANCELLED_STATUSES = {"cancelling", "cancelled"}
 
 
 class PersonaExplorer:
@@ -44,11 +44,13 @@ class PersonaExplorer:
         target_url: str,
         persona: dict[str, Any],
         persona_engine: PersonaEngine,
+        emitter: EventEmitter | None = None,
     ) -> None:
         self.session_id = session_id
         self.target_url = target_url
         self.persona = persona
         self.persona_engine = persona_engine
+        self.emitter = emitter
         self.driver = BrowserDriver(session_id, persona["name"])
         self.nav_graph = persona_engine.get_graph(persona["name"])
         self.validator = ActionValidator()
@@ -58,6 +60,7 @@ class PersonaExplorer:
         self.page_nodes: list[dict[str, Any]] = []
         self.console_errors_all: list[Any] = []
         self.network_failures_all: list[Any] = []
+        self._cancelled = False
 
     async def run(self) -> dict[str, Any]:
         await self.driver.start()
@@ -87,11 +90,11 @@ class PersonaExplorer:
             "bugs_skipped_by_validator": self.validator.skipped,
         }
 
-    # ------------------------------------------------------------------ #
-    # Core exploration loop
-    # ------------------------------------------------------------------ #
+    # ── Core exploration loop ────────────────────────────────────────────
 
     async def _explore_url(self, url: str, depth: int) -> None:
+        if self._cancelled:
+            return
         if depth > settings.max_exploration_depth:
             return
         if url in self.visited_urls:
@@ -100,7 +103,8 @@ class PersonaExplorer:
             return
 
         self.visited_urls.add(url)
-        logger.info("[%s] Visiting (depth=%d): %s", self.persona["name"], depth, url)
+        pname = self.persona["name"]
+        logger.info("[%s] depth=%d  %s", pname, depth, url)
 
         nav = await self.driver.navigate(url)
         if not nav["success"]:
@@ -113,12 +117,37 @@ class PersonaExplorer:
 
         # Performance check
         if load_ms > 5_000 or vitals.get("fcp", 0) > 4_000:
-            screenshot = await self.driver.screenshot("perf")
-            self._emit_bug(self._perf_bug(actual_url, load_ms, vitals, screenshot))
+            ss = await self.driver.screenshot("perf")
+            self._emit_bug(self._perf_bug(actual_url, load_ms, vitals, ss))
 
         dom_summary = await self.driver.extract_dom_summary()
         all_links_raw = await self.driver.get_all_links()
         page_state = await self.driver.get_page_state()
+
+        # Take a page screenshot for vision analysis (depth ≤ 2 only to save cost)
+        page_screenshot = ""
+        visual_quality = None
+        if settings.vision_enabled and depth <= 2:
+            page_screenshot = await self.driver.screenshot(f"page_d{depth}")
+            vision_issues = await analyse_screenshot(page_screenshot, actual_url, pname)
+            if vision_issues:
+                visual_quality = "degraded"
+                await self._emit_async("vision_insight", pname, actual_url, [i.title for i in vision_issues])
+                for vi in vision_issues:
+                    self._emit_bug({
+                        "title": f"[Visual] {vi.title}",
+                        "severity": vi.severity,
+                        "confidence": 0.80,
+                        "description": vi.description,
+                        "reproduction_steps": [f"Navigate to {actual_url}", "Observe the UI"],
+                        "expected_behavior": vi.expected,
+                        "actual_behavior": vi.actual,
+                        "screenshot_path": page_screenshot,
+                        "url_at_error": actual_url,
+                        "error_type": "ux_issue",
+                        "persona_name": pname,
+                        "detected_by_vision": True,
+                    })
 
         # AI page analysis
         analysis = await reason(
@@ -128,57 +157,59 @@ class PersonaExplorer:
                 dom_summary=dom_summary,
                 persona=self.persona,
                 previously_found_bugs=[b["title"] for b in self.bug_candidates],
-            )
+            ),
+            session_id=self.session_id,
         )
 
-        page_type = "other"
         nav_targets: list[dict] = []
 
         if analysis:
             page_type = analysis.get("page_type", "other")
             self.nav_graph.record_visit(actual_url, page_state["title"], page_type)
 
-            # Log AI suspicions as potential bugs before testing
-            for suspicion in analysis.get("suspicions", []):
-                if suspicion.get("severity") in ("high", "critical"):
-                    logger.info(
-                        "[%s] AI suspicion on %s: %s",
-                        self.persona["name"], actual_url, suspicion.get("observation", "")
-                    )
-
-            # Run accessibility audit (lightweight, separate pass)
-            if depth <= 1:  # only audit top-level pages deeply
-                await self._run_accessibility_audit(actual_url, dom_summary)
-
-            # Store page node
             self.page_nodes.append({
                 "url": actual_url,
                 "title": page_state["title"],
                 "page_type": page_type,
                 "interactive_elements": dom_summary.split("\n")[:30],
-                "outgoing_links": [l["url"] for l in all_links_raw[:20]],
+                "outgoing_links": [lnk["url"] for lnk in all_links_raw[:20]],
                 "load_time_ms": load_ms,
+                "visual_quality": visual_quality,
             })
 
-            # Execute test scenarios sorted by priority
+            # Emit page_visited event
+            if self.emitter:
+                await self.emitter.page_visited(actual_url, page_state["title"], page_type, pname, load_ms)
+
+            # Accessibility audit on top-level pages
+            if depth <= 1:
+                await self._run_accessibility_audit(actual_url, dom_summary)
+
+            # Log AI suspicions
+            for s in analysis.get("suspicions", []):
+                if s.get("severity") in ("high", "critical") and self.emitter:
+                    await self.emitter.log(f"Suspicion: {s.get('observation','')}", persona=pname)
+
+            # Execute test scenarios
             scenarios = sorted(
                 analysis.get("test_scenarios", []),
-                key=lambda s: -s.get("priority", 0),
+                key=lambda sc: -sc.get("priority", 0),
             )
-            for scenario in scenarios[: settings.max_actions_per_page // max(len(scenarios), 1)]:
-                if len(self.bug_candidates) > 50:
-                    break  # safety cap
+            max_scenarios = max(1, settings.max_actions_per_page // 3)
+            for scenario in scenarios[:max_scenarios]:
+                if len(self.bug_candidates) >= settings.max_bugs_per_session:
+                    break
+                if self._cancelled:
+                    break
                 await self._run_scenario(scenario, actual_url, dom_summary)
 
-            # Merge AI nav targets with discovered links
             nav_targets = analysis.get("navigation_targets", [])
-            # Normalise to list of dicts
             if nav_targets and isinstance(nav_targets[0], str):
                 nav_targets = [{"url": u, "rationale": "", "priority": 3} for u in nav_targets]
 
-        # Enrich with raw discovered links
+        # Merge discovered links
         for link in all_links_raw:
-            if not any(t["url"] == link["url"] for t in nav_targets):
+            if not any(t.get("url") == link["url"] for t in nav_targets):
                 nav_targets.append({"url": link["url"], "rationale": link.get("text", ""), "priority": 2})
 
         # Flush intercepted errors
@@ -196,7 +227,11 @@ class PersonaExplorer:
                 ss = await self.driver.screenshot("api_err")
                 self._emit_bug(self._api_failure_bug(actual_url, fail, ss))
 
-        # AI decides what to visit next
+        # Emit progress update
+        if self.emitter:
+            await self.emitter.progress(pname, len(self.visited_urls), len(self.bug_candidates), depth)
+
+        # AI exploration strategy
         strategy = await reason(
             exploration_strategy_prompt(
                 visited_urls=list(self.visited_urls),
@@ -206,41 +241,36 @@ class PersonaExplorer:
                 depth=depth,
                 max_depth=settings.max_exploration_depth,
                 nav_graph_summary=self.nav_graph.summary(),
-            )
+            ),
+            session_id=self.session_id,
         )
 
         if strategy.get("should_stop"):
-            logger.info(
-                "[%s] Stopping: %s", self.persona["name"], strategy.get("stop_reason", "")
-            )
+            logger.info("[%s] Stopping: %s", pname, strategy.get("stop_reason", ""))
             return
 
         for next_url in strategy.get("next_urls", [])[:3]:
-            if next_url and next_url not in self.visited_urls:
+            if next_url and next_url not in self.visited_urls and not self._cancelled:
                 self.nav_graph.record_transition(actual_url, next_url)
                 await self._explore_url(next_url, depth + 1)
 
-    # ------------------------------------------------------------------ #
-    # Scenario execution
-    # ------------------------------------------------------------------ #
+    # ── Scenario execution ───────────────────────────────────────────────
 
-    async def _run_scenario(
-        self, scenario: dict, page_url: str, dom_summary: str
-    ) -> None:
-        actions: list[dict] = scenario.get("actions", [])
-        expected: str = scenario.get("expected_outcome", "")
-        failure_indicators: list[str] = scenario.get("failure_indicators", [])
+    async def _run_scenario(self, scenario: dict, page_url: str, dom_summary: str) -> None:
+        actions = scenario.get("actions", [])
+        expected = scenario.get("expected_outcome", "")
+        failure_indicators = scenario.get("failure_indicators", [])
         steps_taken: list[str] = []
         selector_failures = 0
 
-        for action in actions[: settings.max_actions_per_page]:
+        for action in actions[:settings.max_actions_per_page]:
+            if self._cancelled:
+                break
             result = await self.driver.execute_action(action)
             desc = action.get("description") or f"{action.get('type')} {action.get('target','')}"
-            success = result["success"]
-            steps_taken.append(f"{'✓' if success else '✗'} {desc}")
+            steps_taken.append(f"{'✓' if result['success'] else '✗'} {desc}")
 
-            # Selector recovery — if action failed and it's not optional
-            if not success and not action.get("optional") and action.get("target"):
+            if not result["success"] and not action.get("optional") and action.get("target"):
                 selector_failures += 1
                 if selector_failures <= _MAX_SELECTOR_FAILURES:
                     recovery = await reason(
@@ -249,52 +279,43 @@ class PersonaExplorer:
                             action_type=action.get("type", "click"),
                             dom_snapshot=dom_summary,
                             description=desc,
-                        )
+                        ),
+                        session_id=self.session_id,
                     )
                     if recovery.get("element_found") and recovery.get("selectors"):
                         for sel_obj in recovery["selectors"]:
                             if sel_obj.get("confidence", 0) >= 0.6:
-                                recovered_action = {**action, "target": sel_obj["selector"]}
-                                retry = await self.driver.execute_action(recovered_action)
+                                retry = await self.driver.execute_action({**action, "target": sel_obj["selector"]})
                                 if retry["success"]:
-                                    steps_taken[-1] = f"✓ {desc} [recovered selector]"
+                                    steps_taken[-1] = f"✓ {desc} [recovered]"
                                     selector_failures -= 1
                                     break
 
             if selector_failures >= _MAX_SELECTOR_FAILURES:
-                steps_taken.append("✗ Scenario aborted: too many selector failures")
+                steps_taken.append("✗ Aborted: too many selector failures")
                 break
 
             await asyncio.sleep(self.persona.get("interaction_delay_ms", 200) / 1000)
 
-        # Check state after scenario
         console_errors, net_failures = self.driver.flush_interceptor()
         page_state = await self.driver.get_page_state()
 
-        all_errors = [f"[{e.error_type}] {e.message}" for e in console_errors]
-        all_net_fails = [
-            f"{f.method or 'GET'} {f.request_url} → {f.status_code or 'FAILED'}"
-            for f in net_failures
-        ]
-
         assessment = await reason(
             bug_assessment_prompt(
-                action_taken=f"Scenario '{scenario.get('name', 'unnamed')}': " +
-                             "; ".join(steps_taken[-8:]),
+                action_taken=f"Scenario '{scenario.get('name','unnamed')}': " + "; ".join(steps_taken[-8:]),
                 expected=expected,
                 actual_state=page_state.get("visible_text_snippet", ""),
-                console_errors=all_errors,
-                network_failures=all_net_fails,
+                console_errors=[f"[{e.error_type}] {e.message}" for e in console_errors],
+                network_failures=[f"{f.method or 'GET'} {f.request_url} → {f.status_code or 'FAILED'}" for f in net_failures],
                 persona=self.persona,
                 failure_indicators=failure_indicators,
                 page_url=page_url,
-            )
+            ),
+            session_id=self.session_id,
         )
 
         if assessment.get("is_bug"):
-            ss = await self.driver.screenshot(
-                f"bug_{assessment.get('error_type', 'issue')}"
-            )
+            ss = await self.driver.screenshot(f"bug_{assessment.get('error_type','issue')}")
             candidate = {
                 "title": assessment.get("title", "Unnamed bug"),
                 "severity": assessment.get("severity", "medium"),
@@ -310,30 +331,26 @@ class PersonaExplorer:
             }
             self._emit_bug(candidate)
 
-        # Store any new console/network errors captured during scenario
         self.console_errors_all.extend(console_errors)
         self.network_failures_all.extend(net_failures)
 
-    # ------------------------------------------------------------------ #
-    # Accessibility audit
-    # ------------------------------------------------------------------ #
+    # ── Accessibility audit ──────────────────────────────────────────────
 
     async def _run_accessibility_audit(self, url: str, dom_summary: str) -> None:
         audit = await reason(
             accessibility_audit_prompt(url=url, dom_summary=dom_summary),
             max_tokens=1024,
+            session_id=self.session_id,
         )
-        if not audit:
-            return
-        for issue in audit.get("issues", []):
+        for issue in (audit or {}).get("issues", []):
             if issue.get("severity") in ("high", "critical"):
                 self._emit_bug({
-                    "title": f"[A11Y] {issue.get('rule', 'WCAG')}: {issue.get('description', '')[:70]}",
+                    "title": f"[A11Y] {issue.get('rule','WCAG')}: {issue.get('description','')[:70]}",
                     "severity": issue.get("severity", "medium"),
                     "confidence": 0.85,
-                    "description": f"{issue.get('description', '')} Fix: {issue.get('fix', '')}",
-                    "reproduction_steps": [f"Navigate to {url}", f"Inspect element: {issue.get('element','')}"],
-                    "expected_behavior": "Element meets WCAG 2.1 AA requirements",
+                    "description": f"{issue.get('description','')} Fix: {issue.get('fix','')}",
+                    "reproduction_steps": [f"Navigate to {url}", f"Inspect: {issue.get('element','')}"],
+                    "expected_behavior": "Meets WCAG 2.1 AA",
                     "actual_behavior": issue.get("description", ""),
                     "screenshot_path": "",
                     "url_at_error": url,
@@ -341,94 +358,79 @@ class PersonaExplorer:
                     "persona_name": self.persona["name"],
                 })
 
-    # ------------------------------------------------------------------ #
-    # Bug emission with validation
-    # ------------------------------------------------------------------ #
+    # ── Bug emission ─────────────────────────────────────────────────────
 
     def _emit_bug(self, candidate: dict) -> None:
         validation = self.validator.validate(candidate)
-        if validation.passed:
-            self.bug_candidates.append(candidate)
-            logger.info(
-                "[%s] Bug [%s]: %s",
-                self.persona["name"],
-                candidate.get("severity", "?").upper(),
-                candidate.get("title", "")[:80],
+        if not validation.passed:
+            return
+        self.bug_candidates.append(candidate)
+        pname = self.persona["name"]
+        logger.info("[%s] Bug [%s]: %s", pname, candidate.get("severity","?").upper(), candidate.get("title","")[:80])
+        if self.emitter:
+            asyncio.ensure_future(
+                self.emitter.bug_found(
+                    candidate["title"],
+                    candidate.get("severity", "medium"),
+                    pname,
+                    candidate.get("url_at_error", ""),
+                )
             )
 
-    # ------------------------------------------------------------------ #
-    # Bug factory helpers
-    # ------------------------------------------------------------------ #
+    async def _emit_async(self, kind: str, persona: str, url: str, issues: list[str]) -> None:
+        if self.emitter:
+            await self.emitter.vision_insight(persona, url, issues)
+
+    # ── Bug factories ────────────────────────────────────────────────────
 
     def _nav_failure_bug(self, url: str, error: str) -> dict:
         return {
             "title": f"Page unreachable: {url[:70]}",
-            "severity": "high",
-            "confidence": 0.95,
+            "severity": "high", "confidence": 0.95,
             "description": f"Navigation to {url} failed. Error: {error}",
             "reproduction_steps": [f"Navigate to {url}"],
             "expected_behavior": "Page loads with HTTP 200",
             "actual_behavior": f"Navigation failed: {error}",
-            "screenshot_path": "",
-            "url_at_error": url,
-            "error_type": "nav_failure",
-            "persona_name": self.persona["name"],
+            "screenshot_path": "", "url_at_error": url,
+            "error_type": "nav_failure", "persona_name": self.persona["name"],
         }
 
-    def _perf_bug(
-        self, url: str, load_ms: float, vitals: dict, screenshot: str
-    ) -> dict:
+    def _perf_bug(self, url: str, load_ms: float, vitals: dict, screenshot: str) -> dict:
         fcp = vitals.get("fcp")
         detail = f"Load: {load_ms:.0f}ms" + (f", FCP: {fcp}ms" if fcp else "")
         return {
-            "title": f"Slow page load on {url[:60]} ({load_ms:.0f}ms)",
-            "severity": "medium" if load_ms < 8_000 else "high",
-            "confidence": 0.9,
-            "description": f"Page load exceeded threshold. {detail}. Users will experience significant delay.",
+            "title": f"Slow page load: {url[:60]} ({load_ms:.0f}ms)",
+            "severity": "medium" if load_ms < 8_000 else "high", "confidence": 0.9,
+            "description": f"Page load exceeded threshold. {detail}.",
             "reproduction_steps": [f"Navigate to {url}", "Measure load time"],
-            "expected_behavior": "Page loads within 3 seconds (LCP < 2.5s)",
-            "actual_behavior": f"Page took {load_ms:.0f}ms to load ({detail})",
-            "screenshot_path": screenshot,
-            "url_at_error": url,
-            "error_type": "performance",
-            "persona_name": self.persona["name"],
+            "expected_behavior": "Page loads within 3 seconds",
+            "actual_behavior": f"Page took {load_ms:.0f}ms ({detail})",
+            "screenshot_path": screenshot, "url_at_error": url,
+            "error_type": "performance", "persona_name": self.persona["name"],
         }
 
     def _console_error_bug(self, url: str, error: Any, screenshot: str) -> dict:
         return {
             "title": f"Console error: {error.message[:70]}",
-            "severity": "medium",
-            "confidence": 0.75,
-            "description": f"Browser console error recorded on {url}: {error.message}",
+            "severity": "medium", "confidence": 0.75,
+            "description": f"Browser console error on {url}: {error.message}",
             "reproduction_steps": [f"Navigate to {url}", "Open DevTools → Console"],
-            "expected_behavior": "No console errors on page load or interaction",
+            "expected_behavior": "No console errors",
             "actual_behavior": f"console.error: {error.message}",
-            "screenshot_path": screenshot,
-            "url_at_error": url,
-            "error_type": "console_error",
-            "persona_name": self.persona["name"],
+            "screenshot_path": screenshot, "url_at_error": url,
+            "error_type": "console_error", "persona_name": self.persona["name"],
         }
 
     def _api_failure_bug(self, url: str, failure: Any, screenshot: str) -> dict:
         return {
             "title": f"API {failure.status_code}: {failure.request_url[:60]}",
-            "severity": "high" if failure.status_code >= 500 else "medium",
-            "confidence": 0.9,
-            "description": (
-                f"HTTP {failure.status_code} on {failure.method or 'GET'} "
-                f"{failure.request_url} while on {url}."
-            ),
-            "reproduction_steps": [
-                f"Navigate to {url}",
-                f"Trigger action that calls {failure.request_url}",
-                f"Observe HTTP {failure.status_code} in Network tab",
-            ],
-            "expected_behavior": "API returns 2xx response",
-            "actual_behavior": f"API returned HTTP {failure.status_code}",
-            "screenshot_path": screenshot,
-            "url_at_error": url,
-            "error_type": "api_error",
-            "persona_name": self.persona["name"],
+            "severity": "high" if failure.status_code >= 500 else "medium", "confidence": 0.9,
+            "description": f"HTTP {failure.status_code} on {failure.method or 'GET'} {failure.request_url}",
+            "reproduction_steps": [f"Navigate to {url}", f"Trigger call to {failure.request_url}"],
+            "expected_behavior": "API returns 2xx",
+            "actual_behavior": f"HTTP {failure.status_code}",
+            "screenshot_path": screenshot, "url_at_error": url,
+            "error_type": "api_error", "persona_name": self.persona["name"],
         }
 
     def _same_origin(self, url: str) -> bool:

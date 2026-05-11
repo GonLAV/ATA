@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime, Enum,
-    ForeignKey, Text, Boolean, JSON,
+    ForeignKey, Text, Boolean, JSON, Index,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -17,94 +17,108 @@ class Base(DeclarativeBase):
 
 
 class SessionStatus(str, enum.Enum):
-    pending = "pending"
-    running = "running"
+    pending   = "pending"
+    running   = "running"
+    cancelling = "cancelling"
+    cancelled = "cancelled"
     completed = "completed"
-    failed = "failed"
+    failed    = "failed"
 
 
 class Severity(str, enum.Enum):
-    low = "low"
-    medium = "medium"
-    high = "high"
+    low      = "low"
+    medium   = "medium"
+    high     = "high"
     critical = "critical"
 
 
 class Session(Base):
     __tablename__ = "sessions"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    url = Column(String, nullable=False)
-    status = Column(Enum(SessionStatus), default=SessionStatus.pending, nullable=False)
-    config = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    id            = Column(String, primary_key=True, default=_uuid)
+    url           = Column(String, nullable=False)
+    status        = Column(Enum(SessionStatus), default=SessionStatus.pending, nullable=False)
+    config        = Column(JSON, default=dict)          # stores final report after completion
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    started_at    = Column(DateTime, nullable=True)
+    completed_at  = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
 
-    bugs = relationship("Bug", back_populates="session", cascade="all, delete-orphan")
-    page_nodes = relationship("PageNode", back_populates="session", cascade="all, delete-orphan")
-    test_runs = relationship("TestRun", back_populates="session", cascade="all, delete-orphan")
+    # Token usage tracking
+    total_input_tokens  = Column(Integer, default=0)
+    total_output_tokens = Column(Integer, default=0)
+
+    bugs           = relationship("Bug",          back_populates="session", cascade="all, delete-orphan")
+    page_nodes     = relationship("PageNode",     back_populates="session", cascade="all, delete-orphan")
+    test_runs      = relationship("TestRun",      back_populates="session", cascade="all, delete-orphan")
     console_errors = relationship("ConsoleError", back_populates="session", cascade="all, delete-orphan")
     network_failures = relationship("NetworkFailure", back_populates="session", cascade="all, delete-orphan")
+    events         = relationship("SessionEvent", back_populates="session", cascade="all, delete-orphan")
 
 
 class TestRun(Base):
     """One test run per persona per session."""
     __tablename__ = "test_runs"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    id           = Column(String, primary_key=True, default=_uuid)
+    session_id   = Column(String, ForeignKey("sessions.id"), nullable=False)
     persona_name = Column(String, nullable=False)
-    persona_style = Column(String, nullable=False)
-    status = Column(String, default="pending")
-    actions_taken = Column(Integer, default=0)
-    pages_visited = Column(Integer, default=0)
-    bugs_found = Column(Integer, default=0)
-    started_at = Column(DateTime, nullable=True)
+    persona_style= Column(String, nullable=False)
+    status       = Column(String, default="pending")
+    actions_taken= Column(Integer, default=0)
+    pages_visited= Column(Integer, default=0)
+    bugs_found   = Column(Integer, default=0)
+    started_at   = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
     session = relationship("Session", back_populates="test_runs")
-    bugs = relationship("Bug", back_populates="test_run")
+    bugs    = relationship("Bug", back_populates="test_run")
 
 
 class Bug(Base):
     __tablename__ = "bugs"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
-    test_run_id = Column(String, ForeignKey("test_runs.id"), nullable=True)
-    title = Column(String, nullable=False)
-    severity = Column(Enum(Severity), nullable=False)
-    description = Column(Text, nullable=False)
-    reproduction_steps = Column(JSON, default=list)  # list[str]
+    id                = Column(String, primary_key=True, default=_uuid)
+    session_id        = Column(String, ForeignKey("sessions.id"), nullable=False)
+    test_run_id       = Column(String, ForeignKey("test_runs.id"), nullable=True)
+    title             = Column(String, nullable=False)
+    severity          = Column(Enum(Severity), nullable=False)
+    description       = Column(Text, nullable=False)
+    reproduction_steps= Column(JSON, default=list)
     expected_behavior = Column(Text, nullable=False)
-    actual_behavior = Column(Text, nullable=False)
-    screenshot_path = Column(String, nullable=True)
-    url_at_error = Column(String, nullable=True)
-    element_selector = Column(String, nullable=True)
-    error_type = Column(String, nullable=True)  # console_error | nav_failure | assertion | api_error
-    persona_name = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    actual_behavior   = Column(Text, nullable=False)
+    screenshot_path   = Column(String, nullable=True)
+    url_at_error      = Column(String, nullable=True)
+    element_selector  = Column(String, nullable=True)
+    error_type        = Column(String, nullable=True)
+    persona_name      = Column(String, nullable=True)
+    # Vision analysis flag
+    detected_by_vision= Column(Boolean, default=False)
+    created_at        = Column(DateTime, default=datetime.utcnow)
 
-    session = relationship("Session", back_populates="bugs")
-    test_run = relationship("TestRun", back_populates="bugs")
+    session  = relationship("Session",  back_populates="bugs")
+    test_run = relationship("TestRun",  back_populates="bugs")
+
+    __table_args__ = (
+        Index("ix_bugs_session_severity", "session_id", "severity"),
+    )
 
 
 class PageNode(Base):
     """Discovered pages forming the navigation graph."""
     __tablename__ = "page_nodes"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
-    url = Column(String, nullable=False)
-    title = Column(String, nullable=True)
-    page_type = Column(String, nullable=True)  # login | dashboard | form | landing | etc.
+    id                   = Column(String, primary_key=True, default=_uuid)
+    session_id           = Column(String, ForeignKey("sessions.id"), nullable=False)
+    url                  = Column(String, nullable=False)
+    title                = Column(String, nullable=True)
+    page_type            = Column(String, nullable=True)
     interactive_elements = Column(JSON, default=list)
-    outgoing_links = Column(JSON, default=list)
-    visited_at = Column(DateTime, default=datetime.utcnow)
-    load_time_ms = Column(Float, nullable=True)
-    has_errors = Column(Boolean, default=False)
+    outgoing_links       = Column(JSON, default=list)
+    visited_at           = Column(DateTime, default=datetime.utcnow)
+    load_time_ms         = Column(Float, nullable=True)
+    has_errors           = Column(Boolean, default=False)
+    visual_quality       = Column(String, nullable=True)  # good | degraded | broken
 
     session = relationship("Session", back_populates="page_nodes")
 
@@ -112,14 +126,14 @@ class PageNode(Base):
 class ConsoleError(Base):
     __tablename__ = "console_errors"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    id          = Column(String, primary_key=True, default=_uuid)
+    session_id  = Column(String, ForeignKey("sessions.id"), nullable=False)
     test_run_id = Column(String, ForeignKey("test_runs.id"), nullable=True)
-    error_type = Column(String, nullable=False)  # error | warning | info
-    message = Column(Text, nullable=False)
+    error_type  = Column(String, nullable=False)
+    message     = Column(Text, nullable=False)
     stack_trace = Column(Text, nullable=True)
-    url = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    url         = Column(String, nullable=True)
+    timestamp   = Column(DateTime, default=datetime.utcnow)
 
     session = relationship("Session", back_populates="console_errors")
 
@@ -127,13 +141,35 @@ class ConsoleError(Base):
 class NetworkFailure(Base):
     __tablename__ = "network_failures"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    id          = Column(String, primary_key=True, default=_uuid)
+    session_id  = Column(String, ForeignKey("sessions.id"), nullable=False)
     test_run_id = Column(String, ForeignKey("test_runs.id"), nullable=True)
     request_url = Column(String, nullable=False)
-    method = Column(String, nullable=True)
+    method      = Column(String, nullable=True)
     status_code = Column(Integer, nullable=True)
-    error_text = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    error_text  = Column(Text, nullable=True)
+    timestamp   = Column(DateTime, default=datetime.utcnow)
 
     session = relationship("Session", back_populates="network_failures")
+
+
+class SessionEvent(Base):
+    """
+    Persistent activity log — every agent action recorded here.
+    Enables replaying the live feed after page refresh.
+    """
+    __tablename__ = "session_events"
+
+    id         = Column(String, primary_key=True, default=_uuid)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
+    event_type = Column(String, nullable=False)
+    persona    = Column(String, nullable=True)
+    message    = Column(Text, nullable=False, default="")
+    data       = Column(JSON, default=dict)
+    timestamp  = Column(DateTime, default=datetime.utcnow)
+
+    session = relationship("Session", back_populates="events")
+
+    __table_args__ = (
+        Index("ix_session_events_session_ts", "session_id", "timestamp"),
+    )

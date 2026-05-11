@@ -1,6 +1,7 @@
 """QA Copilot — FastAPI application entry point."""
 import logging
 import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,31 +18,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    logger.info("QA Copilot started. DB initialized.")
+    yield
+    logger.info("QA Copilot shutting down.")
+
+
 app = FastAPI(
     title="QA Copilot",
     description=(
         "Autonomous AI-powered QA testing agent. "
         "Explores web applications like a human, finds bugs, generates reports."
     ),
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    lifespan=lifespan,
 )
 
-# Static files + templates
 app.mount("/static", StaticFiles(directory="dashboard/static"), name="static")
 templates = Jinja2Templates(directory="dashboard/templates")
 
-# Routes
 app.include_router(sessions.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
-app.include_router(cicd.router, prefix="/api")
-
-
-@app.on_event("startup")
-async def startup() -> None:
-    await init_db()
-    logger.info("QA Copilot started. DB initialized.")
+app.include_router(cicd.router,    prefix="/api")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -51,7 +54,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "service": "qa-copilot"}
+    return {"status": "ok", "service": "qa-copilot", "version": "1.1.0"}
 
 
 @app.exception_handler(Exception)
