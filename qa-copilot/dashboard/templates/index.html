@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>QA Copilot</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 /* ══════════════════════════════════════════
    TOKENS
@@ -376,6 +377,118 @@ button{font-family:inherit}
   .persona-progress-grid{grid-template-columns:1fr}
   .launch-row{flex-direction:column}
 }
+
+/* ══════════════════════════════════════════
+   HOME TABS
+   ══════════════════════════════════════════ */
+.home-tabs{display:flex;gap:.15rem;border-bottom:1px solid var(--border);margin-bottom:1.1rem;overflow-x:auto}
+.home-tab{background:transparent;border:none;padding:.55rem 1rem;font-size:.82rem;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;font-family:inherit}
+.home-tab:hover{color:var(--text2)}
+.home-tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* SEARCH */
+.search-bar{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:flex-start;justify-content:center;padding-top:7rem}
+.search-bar.open{display:flex}
+.search-box{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);width:100%;max-width:560px;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.5)}
+.search-input-row{display:flex;align-items:center;gap:.6rem;padding:.75rem 1rem;border-bottom:1px solid var(--border)}
+.search-input-row svg{color:var(--text3);flex-shrink:0}
+.search-input-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:.92rem;font-family:inherit}
+.search-results{max-height:360px;overflow-y:auto;padding:.45rem}
+.search-group{font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);padding:.45rem .55rem .22rem;font-weight:700}
+.search-hit{display:flex;align-items:center;gap:.65rem;padding:.5rem .6rem;border-radius:7px;cursor:pointer;transition:background .12s}
+.search-hit:hover{background:var(--surface2)}
+.search-hit-icon{font-size:.9rem;flex-shrink:0;width:20px;text-align:center}
+.search-hit-body{flex:1;min-width:0}
+.search-hit-title{font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-hit-sub{font-size:.71rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-empty{text-align:center;padding:1.75rem;color:var(--text3);font-size:.82rem}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:center;justify-content:center;padding:1.5rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.2rem;border-bottom:1px solid var(--border)}
+.modal-title{font-size:.95rem;font-weight:700}
+.modal-close{background:transparent;border:none;cursor:pointer;color:var(--text3);font-size:1.1rem;padding:.15rem .4rem;border-radius:4px}
+.modal-close:hover{color:var(--text);background:var(--surface2)}
+.modal-body{padding:1.2rem;display:flex;flex-direction:column;gap:.8rem}
+.modal-footer{padding:.9rem 1.2rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:.5rem}
+.form-group{display:flex;flex-direction:column;gap:.28rem}
+.form-label{font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.form-hint{font-size:.68rem;color:var(--text3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.65rem}
+
+/* TEMPLATE CARDS */
+.tpl-grid{display:grid;gap:.55rem}
+.tpl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.9rem 1.05rem;display:flex;align-items:center;gap:.85rem;transition:border-color .18s}
+.tpl-card:hover{border-color:var(--border2)}
+.tpl-icon{width:36px;height:36px;border-radius:10px;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0}
+.tpl-body{flex:1;min-width:0}
+.tpl-name{font-size:.87rem;font-weight:700;margin-bottom:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpl-url{font-family:monospace;font-size:.71rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpl-tags{display:flex;gap:.25rem;flex-wrap:wrap;margin-top:.3rem}
+.tpl-tag{background:var(--surface3);border-radius:999px;padding:.06rem .45rem;font-size:.63rem;color:var(--text3)}
+.tpl-actions{display:flex;gap:.4rem;flex-shrink:0}
+.tpl-meta{font-size:.68rem;color:var(--text3);margin-top:.12rem}
+
+/* SCHEDULE CARDS */
+.sched-grid{display:grid;gap:.55rem}
+.sched-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.9rem 1.05rem;display:flex;align-items:center;gap:.85rem;transition:border-color .18s}
+.sched-card:hover{border-color:var(--border2)}
+.sched-card.disabled{opacity:.55}
+.sched-icon{width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0}
+.sched-icon.enabled{background:var(--accent-bg);border-color:rgba(99,102,241,.25)}
+.sched-body{flex:1;min-width:0}
+.sched-name{font-size:.87rem;font-weight:700;margin-bottom:.12rem}
+.sched-url{font-family:monospace;font-size:.71rem;color:var(--text3)}
+.sched-cron{font-family:monospace;font-size:.71rem;color:var(--accent2);margin-top:.12rem}
+.sched-meta{font-size:.68rem;color:var(--text3);margin-top:.1rem}
+.sched-actions{display:flex;gap:.4rem;flex-shrink:0}
+.toggle{position:relative;display:inline-block;width:34px;height:18px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:var(--surface3);border-radius:999px;border:1px solid var(--border2);transition:background .2s}
+.toggle input:checked+.toggle-track{background:var(--accent)}
+.toggle-thumb{position:absolute;top:2px;left:2px;width:12px;height:12px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle input:checked~.toggle-thumb{transform:translateX(16px)}
+
+/* AUTOMATION SECTION (env, var, cred, notif, integ) */
+.auto-section{margin-bottom:1.4rem}
+.auto-section-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.65rem;padding-bottom:.45rem;border-bottom:1px solid var(--border)}
+.auto-section-title{font-size:.8rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:.4rem}
+.auto-section-right{margin-left:auto}
+.kv-grid{display:flex;flex-direction:column;gap:.32rem}
+.kv-row{display:flex;align-items:center;gap:.6rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.52rem .75rem}
+.kv-key{font-family:monospace;font-size:.78rem;font-weight:600;color:var(--accent2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kv-val{font-family:monospace;font-size:.75rem;color:var(--text3);flex:2;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kv-actions{display:flex;gap:.28rem;flex-shrink:0}
+.integ-card{display:flex;align-items:center;gap:.65rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.7rem .85rem;margin-bottom:.38rem}
+.integ-icon{font-size:1.1rem;width:32px;text-align:center;flex-shrink:0}
+.integ-body{flex:1;min-width:0}
+.integ-name{font-size:.84rem;font-weight:700}
+.integ-type{font-size:.69rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.notif-card{display:flex;align-items:center;gap:.65rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.7rem .85rem;margin-bottom:.38rem}
+.notif-icon{font-size:1.1rem;width:32px;text-align:center;flex-shrink:0}
+.notif-body{flex:1;min-width:0}
+.notif-name{font-size:.84rem;font-weight:700}
+.notif-sub{font-size:.69rem;color:var(--text3)}
+.cred-card{display:flex;align-items:center;gap:.65rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.7rem .85rem;margin-bottom:.38rem}
+.cred-type{background:var(--accent-bg);color:var(--accent2);border-radius:999px;padding:.06rem .45rem;font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+
+/* ANALYTICS */
+.analytics-wrap{display:flex;flex-direction:column;gap:1.1rem}
+.analytics-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.55rem}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.8rem;text-align:center}
+.kpi-num{font-size:1.45rem;font-weight:800;line-height:1;margin-bottom:.22rem}
+.kpi-lbl{font-size:.63rem;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1rem}
+.chart-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);font-weight:700;margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.top-url-row{display:flex;align-items:center;gap:.65rem;padding:.48rem .6rem;border-bottom:1px solid var(--border);font-size:.79rem}
+.top-url-row:last-child{border-bottom:none}
+.top-url-bar{height:5px;flex:1;background:var(--surface3);border-radius:999px;overflow:hidden;max-width:90px}
+.top-url-fill{height:100%;background:var(--accent);border-radius:999px}
+@media(max-width:768px){.chart-row{grid-template-columns:1fr}.analytics-kpis{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -389,9 +502,40 @@ button{font-family:inherit}
   <div class="topbar-right">
     <div class="live-dot" id="topbar-dot" title="Live"></div>
     <span class="live-label" id="topbar-refresh">Live</span>
+    <button class="btn btn-ghost btn-sm" onclick="openSearch()" title="Search (/)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Search
+    </button>
     <a href="/api/docs" target="_blank" class="btn btn-ghost btn-sm">API Docs</a>
   </div>
 </header>
+
+<!-- ════════════════ SEARCH OVERLAY ════════════════ -->
+<div class="search-bar" id="search-bar" onclick="if(event.target===this)closeSearch()">
+  <div class="search-box">
+    <div class="search-input-row">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input" type="search" placeholder="Search sessions, bugs…" oninput="runSearch(this.value)" autocomplete="off" autofocus/>
+      <span style="font-size:.72rem;color:var(--text3)">Esc</span>
+    </div>
+    <div id="search-results"><div class="search-empty">Type to search sessions and bugs…</div></div>
+  </div>
+</div>
+
+<!-- ════════════════ GENERIC MODAL ════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Modal</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- ════════════════ HOME VIEW ════════════════ -->
 <div id="view-home" class="view active">
@@ -431,16 +575,122 @@ button{font-family:inherit}
     <button class="btn btn-ghost btn-sm" id="running-strip-view" onclick="">Watch Live</button>
   </div>
 
-  <div class="section-header">
-    <h2>Recent Sessions</h2>
-    <div class="section-header-right">
-      <button class="btn btn-ghost btn-sm" onclick="loadSessions()">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-        Refresh
-      </button>
+  <!-- Home Tabs -->
+  <div class="home-tabs">
+    <button class="home-tab active" onclick="switchHomeTab('sessions',this)">Sessions</button>
+    <button class="home-tab" onclick="switchHomeTab('templates',this)">Templates</button>
+    <button class="home-tab" onclick="switchHomeTab('schedules',this)">Schedules</button>
+    <button class="home-tab" onclick="switchHomeTab('automation',this)">Automation</button>
+    <button class="home-tab" onclick="switchHomeTab('analytics',this)">Analytics</button>
+  </div>
+
+  <!-- Tab: Sessions -->
+  <div class="tab-panel active" id="tab-sessions">
+    <div class="section-header">
+      <h2>Recent Sessions</h2>
+      <div class="section-header-right">
+        <button class="btn btn-ghost btn-sm" onclick="loadSessions()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+    <div id="sessions-container"><div class="empty-sessions"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- Tab: Templates -->
+  <div class="tab-panel" id="tab-templates">
+    <div class="section-header">
+      <h2>Test Templates</h2>
+      <div class="section-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openCreateTemplate()">+ New Template</button>
+      </div>
+    </div>
+    <div id="templates-container"><div class="empty-sessions"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- Tab: Schedules -->
+  <div class="tab-panel" id="tab-schedules">
+    <div class="section-header">
+      <h2>Scheduled Sessions</h2>
+      <div class="section-header-right">
+        <button class="btn btn-primary btn-sm" onclick="openCreateSchedule()">+ New Schedule</button>
+      </div>
+    </div>
+    <div id="schedules-container"><div class="empty-sessions"><span class="spinner"></span></div></div>
+  </div>
+
+  <!-- Tab: Automation -->
+  <div class="tab-panel" id="tab-automation">
+    <!-- Environments -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🌍 Environments</div>
+        <div class="auto-section-right"><button class="btn btn-ghost btn-sm" onclick="openCreateEnvironment()">+ Add</button></div>
+      </div>
+      <div id="envs-container"><div style="color:var(--text3);font-size:.8rem;padding:.5rem">Loading…</div></div>
+    </div>
+    <!-- Global Variables -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🔠 Global Variables</div>
+        <div class="auto-section-right"><button class="btn btn-ghost btn-sm" onclick="openCreateVariable()">+ Add</button></div>
+      </div>
+      <div id="vars-container"><div style="color:var(--text3);font-size:.8rem;padding:.5rem">Loading…</div></div>
+    </div>
+    <!-- Credentials -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🔐 Credentials</div>
+        <div class="auto-section-right"><button class="btn btn-ghost btn-sm" onclick="openCreateCredential()">+ Add</button></div>
+      </div>
+      <div id="creds-container"><div style="color:var(--text3);font-size:.8rem;padding:.5rem">Loading…</div></div>
+    </div>
+    <!-- Notifications -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🔔 Notifications</div>
+        <div class="auto-section-right"><button class="btn btn-ghost btn-sm" onclick="openCreateNotification()">+ Add</button></div>
+      </div>
+      <div id="notifs-container"><div style="color:var(--text3);font-size:.8rem;padding:.5rem">Loading…</div></div>
+    </div>
+    <!-- Integrations -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🔗 Integrations</div>
+        <div class="auto-section-right"><button class="btn btn-ghost btn-sm" onclick="openCreateIntegration()">+ Add</button></div>
+      </div>
+      <div id="integs-container"><div style="color:var(--text3);font-size:.8rem;padding:.5rem">Loading…</div></div>
+    </div>
+    <!-- Webhooks info -->
+    <div class="auto-section">
+      <div class="auto-section-header">
+        <div class="auto-section-title">🪝 Inbound Webhooks</div>
+      </div>
+      <div class="info-card" style="margin-bottom:0">
+        <div class="info-title" style="margin-bottom:.55rem">Trigger sessions via HTTP</div>
+        <p class="summary-text">POST to <code style="background:var(--surface2);padding:.15rem .45rem;border-radius:5px;font-size:.8rem">/api/webhooks/session</code> with <code style="background:var(--surface2);padding:.15rem .45rem;border-radius:5px;font-size:.8rem">{"url":"https://…"}</code> to start a session from any CI/CD pipeline, GitHub Action, or external system.</p>
+        <p class="summary-text" style="margin-top:.5rem">Each schedule also generates a unique webhook token — find it in the Schedules tab.</p>
+      </div>
     </div>
   </div>
-  <div id="sessions-container"><div class="empty-sessions"><span class="spinner"></span></div></div>
+
+  <!-- Tab: Analytics -->
+  <div class="tab-panel" id="tab-analytics">
+    <div class="section-header">
+      <h2>Analytics &amp; Insights</h2>
+      <div class="section-header-right">
+        <select class="fsel" id="analytics-days" onchange="loadAnalytics()">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="analytics-wrap" id="analytics-wrap">
+      <div class="empty-sessions"><span class="spinner"></span></div>
+    </div>
+  </div>
 
 </div>
 </div>
@@ -532,6 +782,10 @@ button{font-family:inherit}
       <button class="sb-nav-item" data-panel="summary" onclick="switchPanel('summary',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Summary
+      </button>
+      <button class="sb-nav-item" data-panel="integrations" onclick="switchPanel('integrations',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        File Bug
       </button>
     </nav>
   </aside>
@@ -636,6 +890,15 @@ button{font-family:inherit}
         <div class="info-card"><div class="info-title">Recommendations</div><ul class="rec-list" id="sum-recs"></ul></div>
         <div class="info-card"><div class="info-title">Coverage</div><p class="summary-text" id="sum-coverage">—</p></div>
       </div>
+    </div>
+
+    <!-- File Bug (Integrations) -->
+    <div class="panel" id="panel-integrations">
+      <div class="panel-title">File Bug to External System</div>
+      <div id="report-integs-list"><div style="color:var(--text3);font-size:.82rem">Loading integrations…</div></div>
+      <hr class="divider" style="margin:1.1rem 0"/>
+      <div class="panel-title" style="font-size:.88rem">Select a Bug to File</div>
+      <div id="report-bugs-for-filing"></div>
     </div>
 
   </main>
@@ -1224,11 +1487,614 @@ function closeLightbox(){ document.getElementById('lightbox').classList.remove('
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeLightbox(); });
 
 /* ══════════════════════════════════════════════════
+   HOME TABS
+   ══════════════════════════════════════════════════ */
+function switchHomeTab(name, btn){
+  document.querySelectorAll('.home-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='templates')  loadTemplates();
+  if(name==='schedules')  loadSchedules();
+  if(name==='automation') loadAutomation();
+  if(name==='analytics')  loadAnalytics();
+}
+
+/* ══════════════════════════════════════════════════
+   SEARCH
+   ══════════════════════════════════════════════════ */
+let _searchTimer=null;
+function openSearch(){ document.getElementById('search-bar').classList.add('open'); document.getElementById('search-input').focus(); }
+function closeSearch(){ document.getElementById('search-bar').classList.remove('open'); document.getElementById('search-results').innerHTML='<div class="search-empty">Type to search sessions and bugs…</div>'; document.getElementById('search-input').value=''; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){ e.preventDefault(); openSearch(); }
+  if(e.key==='Escape'){ closeSearch(); closeLightbox(); closeModal(); }
+});
+
+function runSearch(q){
+  clearTimeout(_searchTimer);
+  if(!q||q.length<2){ document.getElementById('search-results').innerHTML='<div class="search-empty">Type to search sessions and bugs…</div>'; return; }
+  _searchTimer=setTimeout(async()=>{
+    try{
+      const r=await api(`/analytics/search?q=${encodeURIComponent(q)}&limit=10`);
+      const el=document.getElementById('search-results');
+      const sessions=(r.sessions||[]), bugs=(r.bugs||[]);
+      if(!sessions.length&&!bugs.length){ el.innerHTML='<div class="search-empty">No results found.</div>'; return; }
+      let html='';
+      if(sessions.length){
+        html+=`<div class="search-group">Sessions (${sessions.length})</div>`;
+        sessions.forEach(s=>{ html+=`<div class="search-hit" onclick="closeSearch();openReport('${esc(s.id)}')"><div class="search-hit-icon">🖥</div><div class="search-hit-body"><div class="search-hit-title">${esc(s.url)}</div><div class="search-hit-sub">${esc(s.status)} · ${fmtTime(s.created_at)}</div></div></div>`; });
+      }
+      if(bugs.length){
+        html+=`<div class="search-group">Bugs (${bugs.length})</div>`;
+        bugs.forEach(b=>{ html+=`<div class="search-hit" onclick="closeSearch();openReport('${esc(b.session_id)}')"><div class="search-hit-icon">🐛</div><div class="search-hit-body"><div class="search-hit-title">${esc(b.title)}</div><div class="search-hit-sub">${esc(b.severity)} · ${esc(b.url_at_error||'')}</div></div></div>`; });
+      }
+      el.innerHTML=html;
+    }catch(e){ document.getElementById('search-results').innerHTML=`<div class="search-empty">Search error: ${esc(e.message)}</div>`; }
+  }, 280);
+}
+
+/* ══════════════════════════════════════════════════
+   MODAL
+   ══════════════════════════════════════════════════ */
+let _modalConfirmFn=null;
+function openModal(title, bodyHtml, confirmLabel='Save', onConfirm=null){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=bodyHtml;
+  document.getElementById('modal-confirm').textContent=confirmLabel;
+  document.getElementById('modal-confirm').style.display=onConfirm?'':'none';
+  _modalConfirmFn=onConfirm;
+  document.getElementById('modal-confirm').onclick=()=>{ if(_modalConfirmFn) _modalConfirmFn(); };
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); _modalConfirmFn=null; }
+
+/* ══════════════════════════════════════════════════
+   TEMPLATES
+   ══════════════════════════════════════════════════ */
+async function loadTemplates(){
+  const c=document.getElementById('templates-container');
+  try{
+    const list=await api('/templates');
+    if(!list.length){ c.innerHTML='<div class="empty-sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No templates yet. Save a URL+config as a template to reuse it.</p></div>'; return; }
+    c.innerHTML=`<div class="tpl-grid">${list.map(renderTemplateCard).join('')}</div>`;
+  }catch(e){ c.innerHTML=`<div style="color:var(--c-critical);font-size:.82rem">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderTemplateCard(t){
+  const tags=(t.tags||[]).map(g=>`<span class="tpl-tag">${esc(g)}</span>`).join('');
+  return `<div class="tpl-card" id="tpl-${esc(t.id)}">
+    <div class="tpl-icon">📋</div>
+    <div class="tpl-body">
+      <div class="tpl-name">${esc(t.name)}</div>
+      <div class="tpl-url">${esc(t.url)}</div>
+      ${t.description?`<div class="tpl-meta">${esc(t.description)}</div>`:''}
+      ${tags?`<div class="tpl-tags">${tags}</div>`:''}
+      <div class="tpl-meta">Used ${t.use_count||0}× · ${fmtTime(t.created_at)}</div>
+    </div>
+    <div class="tpl-actions">
+      <button class="btn btn-primary btn-sm" onclick="launchTemplate('${esc(t.id)}','${esc(t.name)}')">▶ Run</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteTemplate('${esc(t.id)}','${esc(t.name)}')" title="Delete">🗑</button>
+    </div>
+  </div>`;
+}
+
+function openCreateTemplate(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-tpl-name" placeholder="e.g. Login Flow Check"/></div>
+    <div class="form-group"><label class="form-label">URL</label><input class="input" id="f-tpl-url" type="url" placeholder="https://…"/></div>
+    <div class="form-group"><label class="form-label">Description</label><input class="input" id="f-tpl-desc" placeholder="What this tests"/></div>
+    <div class="form-group"><label class="form-label">Tags <span class="form-hint">(comma-separated)</span></label><input class="input" id="f-tpl-tags" placeholder="login, auth"/></div>`;
+  openModal('New Test Template', body, 'Create Template', async()=>{
+    const name=document.getElementById('f-tpl-name').value.trim();
+    const url=document.getElementById('f-tpl-url').value.trim();
+    if(!name||!url){ toast('Name and URL are required','warn'); return; }
+    try{
+      await api('/templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        name, url,
+        description: document.getElementById('f-tpl-desc').value,
+        tags: document.getElementById('f-tpl-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+      })});
+      closeModal(); toast('Template created','success'); loadTemplates();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function launchTemplate(id, name){
+  try{
+    const r=await api(`/templates/${id}/launch`,{method:'POST'});
+    toast(`Launched from "${name}" — session ${r.session_id.slice(0,8)}…`,'success');
+    switchHomeTab('sessions', document.querySelector('.home-tab'));
+    await loadSessions(); pollSession(r.session_id);
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteTemplate(id, name){
+  if(!confirm(`Delete template "${name}"?`)) return;
+  try{ await api(`/templates/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadTemplates(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   SCHEDULES
+   ══════════════════════════════════════════════════ */
+async function loadSchedules(){
+  const c=document.getElementById('schedules-container');
+  try{
+    const list=await api('/schedules');
+    if(!list.length){ c.innerHTML='<div class="empty-sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><p>No schedules yet. Set a cron expression to run QA sessions automatically.</p></div>'; return; }
+    c.innerHTML=`<div class="sched-grid">${list.map(renderScheduleCard).join('')}</div>`;
+  }catch(e){ c.innerHTML=`<div style="color:var(--c-critical);font-size:.82rem">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderScheduleCard(s){
+  const wh=s.webhook_token?`<div class="sched-cron">🪝 Webhook: /api/webhooks/trigger/${esc(s.webhook_token)}</div>`:'';
+  return `<div class="sched-card${s.enabled?'':' disabled'}" id="sched-${esc(s.id)}">
+    <div class="sched-icon${s.enabled?' enabled':''}">⏱</div>
+    <div class="sched-body">
+      <div class="sched-name">${esc(s.name)}</div>
+      <div class="sched-url">${esc(s.url)}</div>
+      <div class="sched-cron">⏰ ${esc(s.cron_expr)}</div>
+      ${wh}
+      <div class="sched-meta">${s.last_run_at?'Last run '+fmtTime(s.last_run_at):'Never run'}${s.last_session_id?` · <a href="#" onclick="openReport('${esc(s.last_session_id)}');return false" style="color:var(--accent)">last report</a>`:''}</div>
+    </div>
+    <div class="sched-actions">
+      <label class="toggle" title="${s.enabled?'Disable':'Enable'}">
+        <input type="checkbox" ${s.enabled?'checked':''} onchange="toggleSchedule('${esc(s.id)}',this.checked)"/>
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="runScheduleNow('${esc(s.id)}','${esc(s.name)}')" title="Run now">▶</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteSchedule('${esc(s.id)}','${esc(s.name)}')" title="Delete">🗑</button>
+    </div>
+  </div>`;
+}
+
+function openCreateSchedule(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-sched-name" placeholder="e.g. Nightly Regression"/></div>
+    <div class="form-group"><label class="form-label">URL</label><input class="input" id="f-sched-url" type="url" placeholder="https://…"/></div>
+    <div class="form-group"><label class="form-label">Cron Expression <span class="form-hint">— min hour dom mon dow (UTC)</span></label><input class="input" id="f-sched-cron" placeholder="0 2 * * *" value="0 2 * * *"/></div>
+    <div class="form-group" style="flex-direction:row;align-items:center;gap:.6rem"><label class="form-label" style="margin:0">Enabled</label><input type="checkbox" id="f-sched-enabled" checked style="width:auto"/></div>`;
+  openModal('New Schedule', body, 'Create', async()=>{
+    const name=document.getElementById('f-sched-name').value.trim();
+    const url=document.getElementById('f-sched-url').value.trim();
+    const cron=document.getElementById('f-sched-cron').value.trim();
+    if(!name||!url||!cron){ toast('Name, URL and cron are required','warn'); return; }
+    try{
+      await api('/schedules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,url,cron_expr:cron,enabled:document.getElementById('f-sched-enabled').checked})});
+      closeModal(); toast('Schedule created','success'); loadSchedules();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function toggleSchedule(id, enabled){
+  try{
+    await api(`/schedules/${id}/${enabled?'enable':'disable'}`,{method:'POST'});
+    toast(enabled?'Schedule enabled':'Schedule disabled','success');
+    loadSchedules();
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function runScheduleNow(id, name){
+  try{
+    const r=await api(`/schedules/${id}/run-now`,{method:'POST'});
+    toast(`Running "${name}" now — session ${r.session_id.slice(0,8)}…`,'success');
+    switchHomeTab('sessions', document.querySelector('.home-tab'));
+    await loadSessions(); pollSession(r.session_id);
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteSchedule(id, name){
+  if(!confirm(`Delete schedule "${name}"?`)) return;
+  try{ await api(`/schedules/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadSchedules(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   AUTOMATION: ENVIRONMENTS
+   ══════════════════════════════════════════════════ */
+async function loadEnvironments(){
+  const c=document.getElementById('envs-container');
+  try{
+    const list=await api('/environments');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.79rem;padding:.3rem .1rem">No environments configured.</div>'; return; }
+    c.innerHTML=`<div class="kv-grid">${list.map(e=>`<div class="kv-row">
+      <span class="kv-key">${esc(e.name)}${e.is_default?' <span style="font-size:.63rem;color:var(--c-low)">default</span>':''}</span>
+      <span class="kv-val">${esc(e.base_url)}</span>
+      <div class="kv-actions">
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteEnvironment('${esc(e.id)}','${esc(e.name)}')" title="Delete">🗑</button>
+      </div>
+    </div>`).join('')}</div>`;
+  }catch{}
+}
+
+function openCreateEnvironment(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-env-name" placeholder="staging"/></div>
+    <div class="form-group"><label class="form-label">Base URL</label><input class="input" id="f-env-url" type="url" placeholder="https://staging.example.com"/></div>
+    <div class="form-group"><label class="form-label">Description</label><input class="input" id="f-env-desc" placeholder="Optional"/></div>
+    <div class="form-group" style="flex-direction:row;align-items:center;gap:.6rem"><label class="form-label" style="margin:0">Default</label><input type="checkbox" id="f-env-default" style="width:auto"/></div>`;
+  openModal('New Environment', body, 'Create', async()=>{
+    const name=document.getElementById('f-env-name').value.trim();
+    const url=document.getElementById('f-env-url').value.trim();
+    if(!name||!url){ toast('Name and URL required','warn'); return; }
+    try{
+      await api('/environments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,base_url:url,description:document.getElementById('f-env-desc').value,is_default:document.getElementById('f-env-default').checked})});
+      closeModal(); toast('Environment created','success'); loadEnvironments();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function deleteEnvironment(id, name){
+  if(!confirm(`Delete environment "${name}"?`)) return;
+  try{ await api(`/environments/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadEnvironments(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   AUTOMATION: VARIABLES
+   ══════════════════════════════════════════════════ */
+async function loadVariables(){
+  const c=document.getElementById('vars-container');
+  try{
+    const list=await api('/variables');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.79rem;padding:.3rem .1rem">No variables configured.</div>'; return; }
+    c.innerHTML=`<div class="kv-grid">${list.map(v=>`<div class="kv-row">
+      <span class="kv-key">${esc(v.key)}</span>
+      <span class="kv-val">${esc(v.value)}</span>
+      <div class="kv-actions">
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteVariable('${esc(v.id)}','${esc(v.key)}')" title="Delete">🗑</button>
+      </div>
+    </div>`).join('')}</div>`;
+  }catch{}
+}
+
+function openCreateVariable(){
+  const body=`
+    <div class="form-group"><label class="form-label">Key</label><input class="input" id="f-var-key" placeholder="BASE_URL"/></div>
+    <div class="form-group"><label class="form-label">Value</label><input class="input" id="f-var-val" placeholder="https://…"/></div>
+    <div class="form-group"><label class="form-label">Description</label><input class="input" id="f-var-desc" placeholder="Optional"/></div>`;
+  openModal('New Variable', body, 'Create', async()=>{
+    const key=document.getElementById('f-var-key').value.trim();
+    const value=document.getElementById('f-var-val').value.trim();
+    if(!key||!value){ toast('Key and value required','warn'); return; }
+    try{
+      await api('/variables',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value,description:document.getElementById('f-var-desc').value})});
+      closeModal(); toast('Variable saved','success'); loadVariables();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function deleteVariable(id, key){
+  if(!confirm(`Delete variable "${key}"?`)) return;
+  try{ await api(`/variables/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadVariables(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   AUTOMATION: CREDENTIALS
+   ══════════════════════════════════════════════════ */
+async function loadCredentials(){
+  const c=document.getElementById('creds-container');
+  try{
+    const list=await api('/credentials');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.79rem;padding:.3rem .1rem">No credentials stored.</div>'; return; }
+    c.innerHTML=list.map(cr=>`<div class="cred-card">
+      <span class="cred-type">${esc(cr.cred_type)}</span>
+      <div style="flex:1;min-width:0"><div style="font-size:.84rem;font-weight:700">${esc(cr.name)}</div><div style="font-size:.69rem;color:var(--text3)">${esc(cr.description||'')}</div></div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteCredential('${esc(cr.id)}','${esc(cr.name)}')" title="Delete">🗑</button>
+    </div>`).join('');
+  }catch{}
+}
+
+function openCreateCredential(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-cred-name" placeholder="Production Admin"/></div>
+    <div class="form-group"><label class="form-label">Type</label>
+      <select class="input" id="f-cred-type">
+        <option value="basic">Basic (username + password)</option>
+        <option value="bearer">Bearer Token</option>
+        <option value="api_key">API Key</option>
+        <option value="cookie">Cookie</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Username / Key</label><input class="input" id="f-cred-u" placeholder="admin@example.com"/></div>
+    <div class="form-group"><label class="form-label">Password / Token</label><input class="input" id="f-cred-p" type="password" placeholder="••••••••"/></div>
+    <div class="form-group"><label class="form-label">Description</label><input class="input" id="f-cred-desc" placeholder="Optional"/></div>`;
+  openModal('New Credential', body, 'Store Securely', async()=>{
+    const name=document.getElementById('f-cred-name').value.trim();
+    const type=document.getElementById('f-cred-type').value;
+    if(!name){ toast('Name required','warn'); return; }
+    const data={username:document.getElementById('f-cred-u').value,password:document.getElementById('f-cred-p').value};
+    try{
+      await api('/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,cred_type:type,data,description:document.getElementById('f-cred-desc').value})});
+      closeModal(); toast('Credential stored securely','success'); loadCredentials();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function deleteCredential(id, name){
+  if(!confirm(`Delete credential "${name}"?`)) return;
+  try{ await api(`/credentials/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadCredentials(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   AUTOMATION: NOTIFICATIONS
+   ══════════════════════════════════════════════════ */
+const NOTIF_ICONS={'webhook':'🪝','slack':'💬','discord':'🎮','email':'✉️'};
+async function loadNotifications(){
+  const c=document.getElementById('notifs-container');
+  try{
+    const list=await api('/notifications');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.79rem;padding:.3rem .1rem">No notifications configured.</div>'; return; }
+    c.innerHTML=list.map(n=>`<div class="notif-card">
+      <div class="notif-icon">${NOTIF_ICONS[n.target_type]||'📣'}</div>
+      <div class="notif-body">
+        <div class="notif-name">${esc(n.name)} <span class="pill ${n.active?'pill-low':'pill-muted'}" style="font-size:.6rem">${n.active?'active':'paused'}</span></div>
+        <div class="notif-sub">${esc(n.target_type)} · ${esc((n.events||[]).join(', '))} · min ${esc(n.min_severity)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="testNotification('${esc(n.id)}','${esc(n.name)}')">Test</button>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteNotification('${esc(n.id)}','${esc(n.name)}')" title="Delete">🗑</button>
+    </div>`).join('');
+  }catch{}
+}
+
+function openCreateNotification(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-notif-name" placeholder="Slack Alerts"/></div>
+    <div class="form-group"><label class="form-label">Type</label>
+      <select class="input" id="f-notif-type">
+        <option value="slack">Slack</option>
+        <option value="webhook">Webhook</option>
+        <option value="discord">Discord</option>
+        <option value="email">Email (stub)</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Webhook URL</label><input class="input" id="f-notif-url" placeholder="https://hooks.slack.com/…"/></div>
+    <div class="form-group"><label class="form-label">Min Severity</label>
+      <select class="input" id="f-notif-sev">
+        <option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option>
+      </select>
+    </div>`;
+  openModal('New Notification Target', body, 'Create', async()=>{
+    const name=document.getElementById('f-notif-name').value.trim();
+    const url=document.getElementById('f-notif-url').value.trim();
+    if(!name||!url){ toast('Name and URL required','warn'); return; }
+    try{
+      await api('/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,target_type:document.getElementById('f-notif-type').value,url,events:['session_completed','bug_critical'],min_severity:document.getElementById('f-notif-sev').value})});
+      closeModal(); toast('Notification target created','success'); loadNotifications();
+    }catch(e){ toast(e.message,'error'); }
+  });
+}
+
+async function testNotification(id, name){
+  try{
+    const r=await api(`/notifications/${id}/test`,{method:'POST'});
+    toast(r.success?`✅ Test sent to "${name}"`:`❌ Failed: ${r.detail}`, r.success?'success':'error');
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteNotification(id, name){
+  if(!confirm(`Delete notification target "${name}"?`)) return;
+  try{ await api(`/notifications/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadNotifications(); }catch(e){ toast(e.message,'error'); }
+}
+
+/* ══════════════════════════════════════════════════
+   AUTOMATION: INTEGRATIONS
+   ══════════════════════════════════════════════════ */
+const INTEG_ICONS={github:'🐙',jira:'📘',linear:'🔷'};
+async function loadIntegrations(){
+  const c=document.getElementById('integs-container');
+  try{
+    const list=await api('/integrations');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.79rem;padding:.3rem .1rem">No integrations configured.</div>'; return; }
+    c.innerHTML=list.map(i=>`<div class="integ-card">
+      <div class="integ-icon">${INTEG_ICONS[i.integ_type]||'🔗'}</div>
+      <div class="integ-body">
+        <div class="integ-name">${esc(i.name)} <span class="pill ${i.active?'pill-low':'pill-muted'}" style="font-size:.6rem">${i.active?'active':'disabled'}</span></div>
+        <div class="integ-type">${esc(i.integ_type)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="testIntegration('${esc(i.id)}','${esc(i.name)}')">Test</button>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteIntegration('${esc(i.id)}','${esc(i.name)}')" title="Delete">🗑</button>
+    </div>`).join('');
+  }catch{}
+}
+
+function openCreateIntegration(){
+  const body=`
+    <div class="form-group"><label class="form-label">Name</label><input class="input" id="f-integ-name" placeholder="My GitHub Repo"/></div>
+    <div class="form-group"><label class="form-label">Type</label>
+      <select class="input" id="f-integ-type" onchange="renderIntegFields()">
+        <option value="github">GitHub Issues</option>
+        <option value="jira">Jira</option>
+        <option value="linear">Linear</option>
+      </select>
+    </div>
+    <div id="f-integ-fields"></div>`;
+  openModal('New Integration', body, 'Create', async()=>{
+    const name=document.getElementById('f-integ-name').value.trim();
+    const type=document.getElementById('f-integ-type').value;
+    if(!name){ toast('Name required','warn'); return; }
+    let config={};
+    if(type==='github') config={token:document.getElementById('f-gh-token')?.value,repo:document.getElementById('f-gh-repo')?.value};
+    else if(type==='jira') config={base_url:document.getElementById('f-jira-url')?.value,email:document.getElementById('f-jira-email')?.value,api_token:document.getElementById('f-jira-token')?.value,project_key:document.getElementById('f-jira-proj')?.value};
+    else if(type==='linear') config={api_key:document.getElementById('f-lin-key')?.value,team_id:document.getElementById('f-lin-team')?.value};
+    try{
+      await api('/integrations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,integ_type:type,config})});
+      closeModal(); toast('Integration created','success'); loadIntegrations();
+    }catch(e){ toast(e.message,'error'); }
+  });
+  setTimeout(renderIntegFields,50);
+}
+
+function renderIntegFields(){
+  const type=document.getElementById('f-integ-type')?.value;
+  const el=document.getElementById('f-integ-fields'); if(!el) return;
+  const fields={
+    github:`<div class="form-group"><label class="form-label">GitHub Token</label><input class="input" id="f-gh-token" type="password" placeholder="ghp_…"/></div>
+            <div class="form-group"><label class="form-label">Repository</label><input class="input" id="f-gh-repo" placeholder="owner/repo"/></div>`,
+    jira:`<div class="form-group"><label class="form-label">Jira URL</label><input class="input" id="f-jira-url" placeholder="https://company.atlassian.net"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="input" id="f-jira-email" type="email" placeholder="you@company.com"/></div>
+          <div class="form-group"><label class="form-label">API Token</label><input class="input" id="f-jira-token" type="password" placeholder="ATATT…"/></div>
+          <div class="form-group"><label class="form-label">Project Key</label><input class="input" id="f-jira-proj" placeholder="QA"/></div>`,
+    linear:`<div class="form-group"><label class="form-label">API Key</label><input class="input" id="f-lin-key" type="password" placeholder="lin_api_…"/></div>
+            <div class="form-group"><label class="form-label">Team ID</label><input class="input" id="f-lin-team" placeholder="Your Linear team UUID"/></div>`,
+  };
+  el.innerHTML=fields[type]||'';
+}
+
+async function testIntegration(id, name){
+  try{
+    const r=await api(`/integrations/${id}/test`,{method:'POST'});
+    toast(r.success?`✅ ${r.detail}`:`❌ ${r.detail}`, r.success?'success':'error');
+  }catch(e){ toast(e.message,'error'); }
+}
+
+async function deleteIntegration(id, name){
+  if(!confirm(`Delete integration "${name}"?`)) return;
+  try{ await api(`/integrations/${id}`,{method:'DELETE'}); toast('Deleted','success'); loadIntegrations(); }catch(e){ toast(e.message,'error'); }
+}
+
+function loadAutomation(){ loadEnvironments(); loadVariables(); loadCredentials(); loadNotifications(); loadIntegrations(); }
+
+/* ══════════════════════════════════════════════════
+   REPORT: FILE BUG PANEL
+   ══════════════════════════════════════════════════ */
+async function renderIntegrationsPanel(){
+  const c=document.getElementById('report-integs-list');
+  const bugList=document.getElementById('report-bugs-for-filing');
+  try{
+    const list=await api('/integrations');
+    if(!list.length){ c.innerHTML='<div style="color:var(--text3);font-size:.82rem;padding:.5rem">No integrations configured. Add one in the Automation tab.</div>'; return; }
+    c.innerHTML=`<p style="font-size:.8rem;color:var(--text2);margin-bottom:.75rem">Select a bug below, then click "File" next to your integration.</p>
+    ${list.filter(i=>i.active).map(i=>`<div class="integ-card" id="report-integ-${esc(i.id)}">
+      <div class="integ-icon">${INTEG_ICONS[i.integ_type]||'🔗'}</div>
+      <div class="integ-body"><div class="integ-name">${esc(i.name)}</div><div class="integ-type">${esc(i.integ_type)}</div></div>
+      <button class="btn btn-primary btn-sm" id="file-btn-${esc(i.id)}" onclick="fileBugSelected('${esc(i.id)}')">File Bug</button>
+    </div>`).join('')}`;
+
+    bugList.innerHTML=allBugs.slice(0,30).map(b=>`<label style="display:flex;align-items:center;gap:.65rem;padding:.52rem .65rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:.35rem;cursor:pointer;font-size:.8rem">
+      <input type="radio" name="filing-bug" value="${esc(b.id)}" style="width:auto"/>
+      <span class="pill pill-${b.severity}" style="flex-shrink:0">${esc(b.severity)}</span>
+      <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</span>
+    </label>`).join('');
+  }catch(e){ c.innerHTML=`<div style="color:var(--c-critical);font-size:.82rem">Error loading integrations.</div>`; }
+}
+
+async function fileBugSelected(integId){
+  const sel=document.querySelector('input[name="filing-bug"]:checked');
+  if(!sel){ toast('Select a bug first','warn'); return; }
+  const bugId=sel.value;
+  const btn=document.getElementById('file-btn-'+integId);
+  if(btn){ btn.disabled=true; btn.textContent='Filing…'; }
+  try{
+    const r=await api(`/integrations/${integId}/file-bug/${bugId}`,{method:'POST'});
+    toast(`Ticket created: ${r.ticket_id}`,'success');
+    if(btn){ btn.textContent='Filed ✓'; btn.disabled=false; }
+    if(r.ticket_url) window.open(r.ticket_url,'_blank');
+  }catch(e){
+    toast(e.message,'error');
+    if(btn){ btn.disabled=false; btn.textContent='File Bug'; }
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   ANALYTICS
+   ══════════════════════════════════════════════════ */
+let _chartInstances={};
+function destroyCharts(){ Object.values(_chartInstances).forEach(c=>{try{c.destroy()}catch{}}); _chartInstances={}; }
+
+async function loadAnalytics(){
+  const days=document.getElementById('analytics-days')?.value||30;
+  const wrap=document.getElementById('analytics-wrap');
+  wrap.innerHTML='<div class="empty-sessions"><span class="spinner"></span></div>';
+  destroyCharts();
+  try{
+    const [ov, sotRaw, botRaw, bySev, topUrls, tokRaw]=await Promise.all([
+      api('/analytics/overview'),
+      api(`/analytics/sessions-over-time?days=${days}`),
+      api(`/analytics/bugs-over-time?days=${days}`),
+      api('/analytics/bugs-by-severity'),
+      api('/analytics/top-urls?limit=8'),
+      api(`/analytics/token-usage?days=${days}`),
+    ]);
+
+    wrap.innerHTML=`
+      <div class="analytics-kpis" id="ak"></div>
+      <div class="chart-row">
+        <div class="chart-card"><div class="chart-title">📈 Sessions Over Time</div><canvas id="chart-sot" height="180"></canvas></div>
+        <div class="chart-card"><div class="chart-title">🐛 Bugs Over Time</div><canvas id="chart-bot" height="180"></canvas></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><div class="chart-title">📊 Bugs by Severity</div><canvas id="chart-sev" height="220"></canvas></div>
+        <div class="chart-card"><div class="chart-title">💰 Token Cost</div><canvas id="chart-tok" height="220"></canvas></div>
+      </div>
+      <div class="chart-card"><div class="chart-title">🌐 Most Tested URLs</div><div id="chart-urls"></div></div>`;
+
+    // KPIs
+    document.getElementById('ak').innerHTML=[
+      {n:fmtNum(ov.total_sessions),l:'Total Sessions',c:''},
+      {n:fmtNum(ov.completed_sessions),l:'Completed',c:'color:var(--c-low)'},
+      {n:fmtNum(ov.total_bugs),l:'Bugs Found',c:''},
+      {n:fmtNum(ov.critical_bugs),l:'Critical',c:'color:var(--c-critical)'},
+      {n:fmtDur(ov.avg_duration_seconds),l:'Avg Duration',c:''},
+      {n:`$${(ov.total_cost_usd||0).toFixed(3)}`,l:'Total Cost',c:'color:var(--c-medium)'},
+    ].map(k=>`<div class="kpi-card"><div class="kpi-num" style="${k.c}">${k.n}</div><div class="kpi-lbl">${k.l}</div></div>`).join('');
+
+    const labels=sotRaw.map(r=>r.date);
+    const chartDefaults={responsive:true,animation:{duration:500},plugins:{legend:{labels:{color:'#9aa3be',font:{size:11}}},tooltip:{backgroundColor:'#111420',borderColor:'#222640',borderWidth:1,titleColor:'#e4e9f4',bodyColor:'#9aa3be'}},scales:{x:{ticks:{color:'#5c6480',maxTicksLimit:8},grid:{color:'rgba(34,38,64,.5)'}},y:{ticks:{color:'#5c6480'},grid:{color:'rgba(34,38,64,.5)'}}}};
+
+    // Sessions over time
+    _chartInstances.sot=new Chart(document.getElementById('chart-sot'),{type:'bar',data:{labels,datasets:[
+      {label:'Completed',data:sotRaw.map(r=>r.completed),backgroundColor:'rgba(16,185,129,.6)',borderRadius:3},
+      {label:'Failed',data:sotRaw.map(r=>r.failed),backgroundColor:'rgba(244,63,94,.6)',borderRadius:3},
+    ]},options:{...chartDefaults,plugins:{...chartDefaults.plugins,legend:{...chartDefaults.plugins.legend}},scales:{x:{...chartDefaults.scales.x,stacked:true},y:{...chartDefaults.scales.y,stacked:true}}}});
+
+    // Bugs over time
+    const botLabels=botRaw.map(r=>r.date);
+    _chartInstances.bot=new Chart(document.getElementById('chart-bot'),{type:'line',data:{labels:botLabels,datasets:[
+      {label:'Critical',data:botRaw.map(r=>r.critical||0),borderColor:'#f43f5e',backgroundColor:'rgba(244,63,94,.1)',fill:true,tension:.35},
+      {label:'High',data:botRaw.map(r=>r.high||0),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.08)',fill:true,tension:.35},
+      {label:'Medium',data:botRaw.map(r=>r.medium||0),borderColor:'#f59e0b',backgroundColor:'transparent',tension:.35},
+      {label:'Low',data:botRaw.map(r=>r.low||0),borderColor:'#10b981',backgroundColor:'transparent',tension:.35},
+    ]},options:{...chartDefaults}});
+
+    // Severity donut
+    const sevKeys=['critical','high','medium','low'];
+    const sevColors=['#f43f5e','#f97316','#f59e0b','#10b981'];
+    _chartInstances.sev=new Chart(document.getElementById('chart-sev'),{type:'doughnut',data:{
+      labels:sevKeys.map(k=>k.charAt(0).toUpperCase()+k.slice(1)),
+      datasets:[{data:sevKeys.map(k=>bySev[k]||0),backgroundColor:sevColors,borderWidth:0,hoverOffset:6}]
+    },options:{responsive:true,animation:{duration:500},plugins:{legend:{labels:{color:'#9aa3be',font:{size:11}}}}}});
+
+    // Token cost over time
+    const tokLabels=tokRaw.map(r=>r.date);
+    _chartInstances.tok=new Chart(document.getElementById('chart-tok'),{type:'bar',data:{labels:tokLabels,datasets:[
+      {label:'Cost (USD)',data:tokRaw.map(r=>r.cost_usd||0),backgroundColor:'rgba(99,102,241,.6)',borderRadius:3},
+    ]},options:{...chartDefaults,plugins:{...chartDefaults.plugins},scales:{x:{...chartDefaults.scales.x},y:{...chartDefaults.scales.y,ticks:{...chartDefaults.scales.y.ticks,callback:v=>`$${v.toFixed(3)}`}}}}});
+
+    // Top URLs
+    const maxBugs=Math.max(...topUrls.map(u=>u.total_bugs),1);
+    document.getElementById('chart-urls').innerHTML=topUrls.map(u=>`<div class="top-url-row">
+      <span style="flex:1;min-width:0;font-family:monospace;font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.url)}</span>
+      <div class="top-url-bar"><div class="top-url-fill" style="width:${Math.max(5,u.total_bugs/maxBugs*100)}%"></div></div>
+      <span style="font-size:.73rem;color:var(--c-high);font-weight:600;flex-shrink:0">${u.total_bugs} bugs</span>
+      <span style="font-size:.69rem;color:var(--text3);flex-shrink:0">${u.sessions} sessions</span>
+    </div>`).join('');
+
+  }catch(e){ wrap.innerHTML=`<div style="color:var(--c-critical);font-size:.82rem;padding:1rem">Error loading analytics: ${esc(e.message)}</div>`; }
+}
+
+/* ══════════════════════════════════════════════════
    INIT
    ══════════════════════════════════════════════════ */
 renderPersonaProgress();
 loadSessions();
 setInterval(loadSessions, 30000);
+
+// Override openReport to also load integration panel
+const _origOpenReport=openReport;
+openReport=async(id)=>{
+  await _origOpenReport(id);
+  renderIntegrationsPanel();
+};
 </script>
 </body>
 </html>

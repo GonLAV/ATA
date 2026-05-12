@@ -173,3 +173,106 @@ class SessionEvent(Base):
     __table_args__ = (
         Index("ix_session_events_session_ts", "session_id", "timestamp"),
     )
+
+
+# ---------------------------------------------------------------------------
+# n8n-inspired automation layer
+# ---------------------------------------------------------------------------
+
+class Template(Base):
+    """Saved test configurations — launch with one click (n8n: workflow templates)."""
+    __tablename__ = "templates"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    url         = Column(String, nullable=False)
+    config      = Column(JSON, default=dict)   # max_depth, personas, etc.
+    tags        = Column(JSON, default=list)
+    use_count   = Column(Integer, default=0)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Schedule(Base):
+    """Cron-triggered QA sessions (n8n: scheduled triggers)."""
+    __tablename__ = "schedules"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False)
+    url         = Column(String, nullable=False)
+    cron_expr   = Column(String, nullable=False)   # e.g. "0 */6 * * *"
+    config      = Column(JSON, default=dict)
+    enabled     = Column(Boolean, default=True)
+    webhook_token = Column(String, nullable=True)  # for inbound webhook trigger
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    last_session_id = Column(String, nullable=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_schedules_enabled", "enabled"),
+    )
+
+
+class Environment(Base):
+    """Named test environments (dev / staging / prod) with base URL + vars."""
+    __tablename__ = "environments"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False, unique=True)
+    base_url    = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    variables   = Column(JSON, default=dict)   # key→value
+    is_default  = Column(Boolean, default=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class Variable(Base):
+    """Global reusable key-value pairs (n8n: global variables)."""
+    __tablename__ = "variables"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    key         = Column(String, nullable=False, unique=True)
+    value       = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class Credential(Base):
+    """Encrypted secrets for authenticated testing (n8n: credentials store)."""
+    __tablename__ = "credentials"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False)
+    cred_type   = Column(String, nullable=False)  # basic | bearer | cookie | api_key
+    data        = Column(JSON, nullable=False)     # encrypted JSON blob
+    description = Column(Text, nullable=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class NotificationTarget(Base):
+    """Outbound alerts on session complete or bug found (n8n: alerting)."""
+    __tablename__ = "notification_targets"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False)
+    target_type = Column(String, nullable=False)  # webhook | slack | discord | email
+    url         = Column(String, nullable=True)    # webhook / Slack URL
+    email       = Column(String, nullable=True)
+    events      = Column(JSON, default=list)       # ["session_completed","bug_critical"]
+    min_severity= Column(String, default="medium") # low|medium|high|critical
+    active      = Column(Boolean, default=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+class Integration(Base):
+    """External bug-filing integrations (GitHub Issues, Jira, Linear)."""
+    __tablename__ = "integrations"
+
+    id          = Column(String, primary_key=True, default=_uuid)
+    name        = Column(String, nullable=False)
+    integ_type  = Column(String, nullable=False)  # github | jira | linear
+    config      = Column(JSON, nullable=False)     # repo, project, token, etc.
+    active      = Column(Boolean, default=True)
+    created_at  = Column(DateTime, default=datetime.utcnow)
