@@ -10,6 +10,7 @@ import {
 } from '../database/Repository';
 import { buildDashboard, BugReporter } from '../reporters/BugReporter';
 import { RegressionContractBuilder } from '../contracts/RegressionContractBuilder';
+import { EvaluationEngine } from '../evaluation/EvaluationEngine';
 import { observability } from '../observability/Observability';
 import type { CreateRunResponse } from '../types';
 
@@ -177,6 +178,43 @@ router.get('/runs/:id/regression-spec', (req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'text/typescript; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${contract.specFilename}"`);
   res.send(contract.spec);
+});
+
+// ─── GET /api/runs/:id/evaluation ────────────────────────────────────────────
+// Multi-layer evaluation + Bayesian confidence scores for all bugs and risks.
+router.get('/runs/:id/evaluation', (req: Request, res: Response): void => {
+  const run = getRun(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+
+  const engine = new EvaluationEngine();
+  const bugs = getBugsByRun(run.id);
+  const risks = getRiskSignalsByRun(run.id);
+
+  const bugEvaluations = bugs.map((b) => engine.evaluate(b));
+  const riskEvaluations = risks.map((r) => engine.evaluateRisk(r));
+
+  const all = [...bugEvaluations, ...riskEvaluations];
+  const avgConfidence =
+    all.length > 0
+      ? Math.round((all.reduce((s, e) => s + e.confidenceScore, 0) / all.length) * 100) / 100
+      : null;
+
+  res.json({
+    runId: run.id,
+    evaluatedAt: new Date().toISOString(),
+    summary: {
+      totalEvaluated: all.length,
+      avgConfidenceScore: avgConfidence,
+      accept: all.filter((e) => e.recommendation === 'accept').length,
+      review: all.filter((e) => e.recommendation === 'review').length,
+      reject: all.filter((e) => e.recommendation === 'reject').length,
+    },
+    bugEvaluations,
+    riskEvaluations,
+  });
 });
 
 // ─── GET /api/metrics ───────────────────────────────────────────────────────
