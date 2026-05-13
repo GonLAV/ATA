@@ -137,7 +137,8 @@ export type RiskSignalType =
   | 'conversion_friction'
   | 'navigation_risk'
   | 'technical_reliability'
-  | 'coverage_gap';
+  | 'coverage_gap'
+  | 'security_vulnerability';
 
 export interface ProductRiskSignal {
   id: string;

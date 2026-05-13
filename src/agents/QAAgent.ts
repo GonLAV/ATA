@@ -6,6 +6,8 @@ import { PageExplorer } from '../browser/PageExplorer';
 import { ScreenshotManager } from '../browser/ScreenshotManager';
 import { LLMClient } from './LLMClient';
 import { ProductRiskRadar } from './ProductRiskRadar';
+import { TestMutator } from '../mutation/TestMutator';
+import { RedTeamEngine } from '../redteam/RedTeamEngine';
 import {
   createRun,
   updateRun,
@@ -49,6 +51,8 @@ export class QAAgent {
   private explorer: PageExplorer;
   private llm: LLMClient;
   private riskRadar: ProductRiskRadar;
+  private mutator: TestMutator;
+  private redTeam: RedTeamEngine;
   private stepTimeoutMs: number;
   private discoveryPageLimit: number;
   private maxScenarios: number;
@@ -59,6 +63,8 @@ export class QAAgent {
     this.explorer = new PageExplorer(this.screenshotManager);
     this.llm = new LLMClient();
     this.riskRadar = new ProductRiskRadar();
+    this.mutator = new TestMutator();
+    this.redTeam = new RedTeamEngine();
     const config = getConfig();
     this.stepTimeoutMs = config.stepTimeoutMs;
     this.discoveryPageLimit = config.discoveryPageLimit;
@@ -139,15 +145,21 @@ export class QAAgent {
       }
 
       // ── Step 2: Generate test scenarios ──
-        const rawScenarios = (await this.llm.generateTestScenarios(explorationMap)).slice(0, this.maxScenarios);
+      const rawScenarios = (await this.llm.generateTestScenarios(explorationMap)).slice(0, this.maxScenarios);
       console.log(`[QAAgent] LLM generated ${rawScenarios.length} scenarios`);
 
-      const scenarios: TestScenario[] = rawScenarios.map((s) => ({
+      const standardScenarios: TestScenario[] = rawScenarios.map((s) => ({
         ...s,
         id: randomUUID(),
         runId,
         status: 'pending',
       }));
+
+      // ── Step 2b: Append red team scenarios ──
+      const redTeamScenarios = this.redTeam.generateScenarios(explorationMap, runId);
+      console.log(`[QAAgent] Red team generated ${redTeamScenarios.length} adversarial scenarios`);
+
+      const scenarios: TestScenario[] = [...standardScenarios, ...redTeamScenarios];
 
       for (const s of scenarios) {
         createScenario(s);
@@ -386,14 +398,22 @@ export class QAAgent {
       case 'click':
         if (step.selector) {
           await page.waitForSelector(step.selector, { timeout }).catch(() => undefined);
-          await page.click(step.selector, { timeout });
+          await this.tryWithMutation(
+            () => page.click(step.selector!, { timeout }),
+            step,
+            async (alt) => { await page.click(alt, { timeout }); },
+          );
         }
         break;
 
       case 'fill':
         if (step.selector && step.value !== undefined) {
           await page.waitForSelector(step.selector, { timeout }).catch(() => undefined);
-          await page.fill(step.selector, step.value, { timeout });
+          await this.tryWithMutation(
+            () => page.fill(step.selector!, step.value!, { timeout }),
+            step,
+            async (alt) => { await page.fill(alt, step.value!, { timeout }); },
+          );
         }
         break;
 
@@ -461,6 +481,36 @@ export class QAAgent {
       consoleErrorsDelta: consoleErrors.length - beforeConsoleCount,
       durationMs: Date.now() - startedAt,
     };
+  }
+
+  /**
+   * Attempts the primary action. On failure, asks TestMutator for alternative
+   * selectors and retries each in order. Throws the original error only if
+   * all candidates also fail.
+   */
+  private async tryWithMutation(
+    primary: () => Promise<void>,
+    step: TestStep,
+    withAlt: (altSelector: string) => Promise<void>,
+  ): Promise<void> {
+    try {
+      await primary();
+    } catch (originalErr) {
+      const mutation = this.mutator.mutateSelector(step);
+      if (!mutation) throw originalErr;
+
+      for (const alt of mutation.candidateSelectors) {
+        try {
+          await withAlt(alt);
+          console.log(`[QAAgent] Self-healed: ${mutation.originalSelector} → ${alt}`);
+          return;
+        } catch {
+          // try next candidate
+        }
+      }
+
+      throw originalErr;
+    }
   }
 
   private async bodyText(page: Page): Promise<string> {
