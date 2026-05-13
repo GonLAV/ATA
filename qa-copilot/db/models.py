@@ -276,3 +276,99 @@ class Integration(Base):
     config      = Column(JSON, nullable=False)     # repo, project, token, etc.
     active      = Column(Boolean, default=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Evaluation layer — accuracy scoring & feedback engine
+# ---------------------------------------------------------------------------
+
+class EvaluationStatus(str, enum.Enum):
+    pending   = "pending"
+    running   = "running"
+    completed = "completed"
+    failed    = "failed"
+
+
+class Evaluation(Base):
+    """
+    Multi-dimensional accuracy evaluation for a completed QA session.
+
+    Dimensions scored 0-100:
+      - coverage      : breadth of pages explored
+      - bug_quality   : average per-bug report quality
+      - precision     : estimated true-positive rate
+      - detail        : reproduction steps + expected/actual completeness
+      - severity_cal  : severity calibration (does severity match description?)
+      - ai_confidence : average AI confidence across bug candidates
+      - monitoring    : console errors + network failures captured
+      - persona_div   : diversity of bugs across personas
+    """
+    __tablename__ = "evaluations"
+
+    id              = Column(String, primary_key=True, default=_uuid)
+    session_id      = Column(String, ForeignKey("sessions.id"), nullable=False, unique=True)
+    status          = Column(Enum(EvaluationStatus), default=EvaluationStatus.pending)
+
+    # Aggregate score
+    overall_score   = Column(Float, nullable=True)   # 0-100
+    accuracy_pct    = Column(Float, nullable=True)   # same as overall_score but named for clarity
+    grade           = Column(String, nullable=True)  # A / B / C / D / F
+
+    # Dimension scores (0-100 each)
+    dim_coverage    = Column(Float, nullable=True)
+    dim_bug_quality = Column(Float, nullable=True)
+    dim_precision   = Column(Float, nullable=True)
+    dim_detail      = Column(Float, nullable=True)
+    dim_severity    = Column(Float, nullable=True)
+    dim_confidence  = Column(Float, nullable=True)
+    dim_monitoring  = Column(Float, nullable=True)
+    dim_persona_div = Column(Float, nullable=True)
+
+    # Per-bug scores (JSON list of {bug_id, score, issues})
+    bug_scores      = Column(JSON, default=list)
+
+    # Ground-truth comparison (optional)
+    gt_expected_bugs = Column(Integer, nullable=True)  # user-supplied
+    gt_found_bugs    = Column(Integer, nullable=True)
+    gt_recall_pct    = Column(Float, nullable=True)
+    gt_precision_pct = Column(Float, nullable=True)
+    gt_f1_score      = Column(Float, nullable=True)
+
+    # AI-generated narrative feedback
+    ai_summary      = Column(Text, nullable=True)
+    error_message   = Column(Text, nullable=True)
+
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    completed_at    = Column(DateTime, nullable=True)
+
+    session  = relationship("Session")
+    feedback = relationship("EvaluationFeedback", back_populates="evaluation",
+                            cascade="all, delete-orphan",
+                            order_by="EvaluationFeedback.priority.desc()")
+
+    __table_args__ = (
+        Index("ix_evaluations_session_id", "session_id"),
+    )
+
+
+class EvaluationFeedback(Base):
+    """
+    Individual feedback item produced by the evaluation engine.
+    Each item identifies a specific weakness and suggests an improvement.
+    """
+    __tablename__ = "evaluation_feedback"
+
+    id           = Column(String, primary_key=True, default=_uuid)
+    evaluation_id= Column(String, ForeignKey("evaluations.id"), nullable=False)
+
+    dimension    = Column(String, nullable=False)   # which dimension triggered this
+    category     = Column(String, nullable=False)   # bug_quality | coverage | precision | …
+    severity     = Column(String, nullable=False)   # info | warning | critical
+    priority     = Column(Integer, default=0)       # higher = shown first
+    title        = Column(String, nullable=False)
+    detail       = Column(Text, nullable=False)
+    suggestion   = Column(Text, nullable=True)
+    affected_ids = Column(JSON, default=list)       # list of bug_ids if applicable
+
+    evaluation = relationship("Evaluation", back_populates="feedback")
+

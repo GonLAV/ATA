@@ -489,6 +489,68 @@ button{font-family:inherit}
 .top-url-bar{height:5px;flex:1;background:var(--surface3);border-radius:999px;overflow:hidden;max-width:90px}
 .top-url-fill{height:100%;background:var(--accent);border-radius:999px}
 @media(max-width:768px){.chart-row{grid-template-columns:1fr}.analytics-kpis{grid-template-columns:1fr 1fr}}
+
+/* ══════════════════════════════════════════
+   EVALUATION PANEL
+   ══════════════════════════════════════════ */
+.eval-hero{display:flex;align-items:center;gap:1.5rem;padding:1.2rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:1.1rem}
+.score-ring-wrap{position:relative;flex-shrink:0;width:90px;height:90px}
+.score-ring-svg{transform:rotate(-90deg)}
+.score-ring-track{fill:none;stroke:var(--surface3);stroke-width:9}
+.score-ring-fill{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .8s ease,stroke .4s}
+.score-ring-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-pct{font-size:1.3rem;font-weight:900;line-height:1}
+.score-grade{font-size:.72rem;font-weight:700;margin-top:.1rem;letter-spacing:.04em}
+.eval-hero-body{flex:1;min-width:0}
+.eval-hero-title{font-size:1rem;font-weight:800;margin-bottom:.2rem}
+.eval-hero-summary{font-size:.81rem;color:var(--text2);line-height:1.65}
+.eval-hero-actions{display:flex;gap:.5rem;margin-top:.65rem}
+
+.dims-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.1rem}
+@media(max-width:600px){.dims-grid{grid-template-columns:1fr}}
+.dim-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.75rem .9rem}
+.dim-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.dim-name{font-size:.74rem;font-weight:700;color:var(--text2);text-transform:capitalize}
+.dim-score{font-size:.82rem;font-weight:800}
+.dim-bar{height:6px;background:var(--surface3);border-radius:999px;overflow:hidden;margin-bottom:.25rem}
+.dim-fill{height:100%;border-radius:999px;transition:width .7s ease}
+.dim-weight{font-size:.62rem;color:var(--text3)}
+
+.feedback-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem}
+.fb-item{background:var(--surface);border:1px solid var(--border);border-left:3px solid;border-radius:var(--r);padding:.8rem .95rem}
+.fb-item.critical{border-left-color:var(--c-critical)}
+.fb-item.warning {border-left-color:var(--c-high)}
+.fb-item.info    {border-left-color:var(--accent)}
+.fb-header{display:flex;align-items:flex-start;gap:.55rem;margin-bottom:.3rem}
+.fb-sev{font-size:.63rem;font-weight:700;text-transform:uppercase;border-radius:999px;padding:.1rem .4rem;flex-shrink:0;margin-top:.1rem}
+.fb-sev.critical{background:var(--bg-critical);color:var(--c-critical)}
+.fb-sev.warning {background:var(--bg-high);color:var(--c-high)}
+.fb-sev.info    {background:var(--accent-bg);color:var(--accent2)}
+.fb-title{font-size:.845rem;font-weight:700;flex:1}
+.fb-dim{font-size:.63rem;color:var(--text3);background:var(--surface2);border-radius:999px;padding:.08rem .38rem;flex-shrink:0;align-self:flex-start;margin-top:.12rem}
+.fb-detail{font-size:.79rem;color:var(--text2);line-height:1.55;margin-bottom:.3rem}
+.fb-suggestion{font-size:.77rem;color:var(--accent2);display:flex;align-items:flex-start;gap:.35rem}
+.fb-suggestion::before{content:"→";flex-shrink:0;margin-top:.05rem}
+
+.bug-score-list{display:flex;flex-direction:column;gap:.38rem}
+.bs-row{display:flex;align-items:center;gap:.65rem;padding:.52rem .75rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:.8rem}
+.bs-score-badge{width:38px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex-shrink:0}
+.bs-score-a{background:rgba(16,185,129,.15);color:var(--c-low)}
+.bs-score-b{background:rgba(99,102,241,.15);color:var(--accent2)}
+.bs-score-c{background:rgba(245,158,11,.15);color:var(--c-medium)}
+.bs-score-d{background:rgba(249,115,22,.15);color:var(--c-high)}
+.bs-score-f{background:rgba(244,63,94,.15);color:var(--c-critical)}
+.bs-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-issues{font-size:.68rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+
+.gt-form{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);padding:1rem;margin-bottom:1.1rem}
+.gt-form-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:.65rem;display:flex;align-items:center;gap:.4rem}
+.gt-textarea{width:100%;min-height:90px;resize:vertical;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-size:.8rem;outline:none;font-family:monospace;transition:border-color .2s}
+.gt-textarea:focus{border-color:var(--accent)}
+.gt-result{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.75rem}
+.gt-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem;text-align:center}
+.gt-num{font-size:1.1rem;font-weight:800;line-height:1}
+.gt-lbl{font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:.1rem}
 </style>
 </head>
 <body>
@@ -783,6 +845,11 @@ button{font-family:inherit}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Summary
       </button>
+      <button class="sb-nav-item" data-panel="evaluation" onclick="switchPanel('evaluation',this);loadEvalPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="16 12 12 8 8 12"/><line x1="12" y1="16" x2="12" y2="8"/></svg>
+        Evaluation
+        <span class="sb-nav-badge" id="eval-grade-badge" style="display:none">—</span>
+      </button>
       <button class="sb-nav-item" data-panel="integrations" onclick="switchPanel('integrations',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
         File Bug
@@ -889,6 +956,41 @@ button{font-family:inherit}
         <div class="info-card"><div class="info-title">Assessment</div><p class="summary-text" id="sum-text">—</p></div>
         <div class="info-card"><div class="info-title">Recommendations</div><ul class="rec-list" id="sum-recs"></ul></div>
         <div class="info-card"><div class="info-title">Coverage</div><p class="summary-text" id="sum-coverage">—</p></div>
+      </div>
+    </div>
+
+    <!-- Evaluation -->
+    <div class="panel" id="panel-evaluation">
+      <div class="panel-title">
+        Accuracy Evaluation
+        <span class="panel-subtitle">— AI-powered input/output quality scoring</span>
+      </div>
+      <div id="eval-content">
+        <div style="text-align:center;padding:2rem;color:var(--text3)">
+          <p style="margin-bottom:1rem;font-size:.85rem">Run an evaluation to score this session's accuracy across 8 dimensions and get actionable feedback.</p>
+          <button class="btn btn-primary" onclick="runEvaluation()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="16 12 12 8 8 12"/><line x1="12" y1="16" x2="12" y2="8"/></svg>
+            Run Evaluation
+          </button>
+        </div>
+      </div>
+
+      <!-- Ground Truth Comparison -->
+      <div class="gt-form" id="gt-form">
+        <div class="gt-form-title">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Ground Truth Comparison (optional)
+        </div>
+        <p style="font-size:.77rem;color:var(--text3);margin-bottom:.6rem">Paste known bug titles (one per line) to measure Recall, Precision and F1. Leave empty to skip.</p>
+        <textarea class="gt-textarea" id="gt-input" placeholder="Login form does not validate empty email&#10;404 on /products page&#10;Add to cart button unresponsive"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:.55rem">
+          <button class="btn btn-primary btn-sm" onclick="runEvaluation(true)">
+            ⚖ Evaluate with Ground Truth
+          </button>
+        </div>
+        <div id="gt-result" style="display:none">
+          <div class="gt-result" id="gt-stats"></div>
+        </div>
       </div>
     </div>
 
@@ -2094,7 +2196,192 @@ const _origOpenReport=openReport;
 openReport=async(id)=>{
   await _origOpenReport(id);
   renderIntegrationsPanel();
+  // Auto-load cached evaluation if it exists
+  _loadCachedEval(id);
 };
+
+/* ══════════════════════════════════════════════════
+   EVALUATION
+   ══════════════════════════════════════════════════ */
+const EVAL_DIM_LABELS={
+  coverage:'Coverage', bug_quality:'Bug Quality', precision:'Precision',
+  detail:'Detail', severity:'Severity Cal.', confidence:'AI Confidence',
+  monitoring:'Monitoring', persona_div:'Persona Diversity'
+};
+const EVAL_DIM_WEIGHTS={
+  coverage:15, bug_quality:20, precision:20, detail:15,
+  severity:10, confidence:10, monitoring:5, persona_div:5
+};
+
+function _dimColor(score){
+  if(score>=85) return 'var(--c-low)';
+  if(score>=70) return 'var(--accent2)';
+  if(score>=55) return 'var(--c-medium)';
+  return 'var(--c-critical)';
+}
+function _ringColor(score){
+  if(score>=85) return '#10b981';
+  if(score>=70) return '#6366f1';
+  if(score>=55) return '#f59e0b';
+  return '#f43f5e';
+}
+function _bugScoreGrade(s){ if(s>=90)return'a';if(s>=80)return'b';if(s>=65)return'c';if(s>=50)return'd';return'f'; }
+
+async function runEvaluation(withGT=false){
+  if(!currentSessionId){ toast('No session open','warn'); return; }
+  const c=document.getElementById('eval-content');
+  c.innerHTML=`<div style="text-align:center;padding:2.5rem;color:var(--text3)"><span class="spinner" style="width:22px;height:22px;border-width:3px"></span><p style="margin-top:.75rem;font-size:.83rem">Evaluating… Claude is analysing accuracy across 8 dimensions.</p></div>`;
+
+  const expectedBugs=withGT
+    ? (document.getElementById('gt-input').value||'').split('\n').map(s=>s.trim()).filter(Boolean)
+    : null;
+
+  try{
+    // Trigger evaluation
+    await api(`/evaluations/sessions/${currentSessionId}`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({expected_bugs:expectedBugs, use_ai_summary:true})
+    });
+    // Poll until complete
+    let ev=null, attempts=0;
+    while(attempts<30){
+      await new Promise(r=>setTimeout(r,2000));
+      ev=await api(`/evaluations/sessions/${currentSessionId}`);
+      if(ev.status==='completed'||ev.status==='failed') break;
+      attempts++;
+    }
+    if(!ev||ev.status==='failed'){
+      c.innerHTML=`<div style="color:var(--c-critical);padding:1rem;font-size:.83rem">Evaluation failed. Check server logs.</div>`;
+      return;
+    }
+    renderEvaluation(ev);
+  }catch(e){
+    c.innerHTML=`<div style="color:var(--c-critical);padding:1rem;font-size:.83rem">Error: ${esc(e.message)}</div>`;
+  }
+}
+
+async function _loadCachedEval(sessionId){
+  try{
+    const ev=await api(`/evaluations/sessions/${sessionId}`);
+    if(ev&&ev.status==='completed'){
+      renderEvaluation(ev);
+      // Show grade badge in sidebar
+      const badge=document.getElementById('eval-grade-badge');
+      if(badge){ badge.textContent=ev.grade||'?'; badge.style.display=''; }
+    }
+  }catch{}
+}
+
+async function loadEvalPanel(){
+  if(!currentSessionId) return;
+  await _loadCachedEval(currentSessionId);
+}
+
+function renderEvaluation(ev){
+  const score=ev.overall_score||0;
+  const grade=ev.grade||'?';
+  const color=_ringColor(score);
+  const circumference=2*Math.PI*38;
+  const offset=circumference-(score/100)*circumference;
+
+  // Hero ring
+  const heroHtml=`
+    <div class="eval-hero">
+      <div class="score-ring-wrap">
+        <svg class="score-ring-svg" width="90" height="90" viewBox="0 0 90 90">
+          <circle class="score-ring-track" cx="45" cy="45" r="38"/>
+          <circle class="score-ring-fill" cx="45" cy="45" r="38"
+            stroke="${color}"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${offset}"/>
+        </svg>
+        <div class="score-ring-text">
+          <span class="score-pct" style="color:${color}">${score.toFixed(0)}%</span>
+          <span class="score-grade" style="color:${color}">Grade ${grade}</span>
+        </div>
+      </div>
+      <div class="eval-hero-body">
+        <div class="eval-hero-title">Accuracy Score: ${score.toFixed(1)}% — Grade ${grade}</div>
+        <div class="eval-hero-summary">${esc(ev.ai_summary||'No AI summary available.')}</div>
+        <div class="eval-hero-actions">
+          <button class="btn btn-primary btn-sm" onclick="runEvaluation()">↻ Re-evaluate</button>
+          <button class="btn btn-ghost btn-sm" onclick="runEvaluation(true)">⚖ With Ground Truth</button>
+        </div>
+      </div>
+    </div>`;
+
+  // Dimensions
+  const dimKeys=['coverage','bug_quality','precision','detail','severity','confidence','monitoring','persona_div'];
+  const dimsHtml=`
+    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:.55rem">8-Dimension Breakdown</div>
+    <div class="dims-grid">
+      ${dimKeys.map(k=>{
+        const s=ev.dimensions[k]??0;
+        const c=_dimColor(s);
+        const w=EVAL_DIM_WEIGHTS[k]||0;
+        return `<div class="dim-card">
+          <div class="dim-header">
+            <span class="dim-name">${EVAL_DIM_LABELS[k]||k}</span>
+            <span class="dim-score" style="color:${c}">${s.toFixed(0)}</span>
+          </div>
+          <div class="dim-bar"><div class="dim-fill" style="width:${s}%;background:${c}"></div></div>
+          <div class="dim-weight">Weight: ${w}%</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  // Feedback
+  const fb=ev.feedback||[];
+  const fbHtml=fb.length?`
+    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:.55rem">
+      Feedback — ${fb.length} item${fb.length!==1?'s':''}
+    </div>
+    <div class="feedback-list">
+      ${fb.map(f=>`<div class="fb-item ${f.severity}">
+        <div class="fb-header">
+          <span class="fb-sev ${f.severity}">${f.severity}</span>
+          <span class="fb-title">${esc(f.title)}</span>
+          <span class="fb-dim">${esc(f.dimension.replace(/_/g,' '))}</span>
+        </div>
+        <div class="fb-detail">${esc(f.detail)}</div>
+        ${f.suggestion?`<div class="fb-suggestion">${esc(f.suggestion)}</div>`:''}
+        ${(f.affected_ids||[]).length?`<div style="font-size:.67rem;color:var(--text3);margin-top:.3rem">Affects ${f.affected_ids.length} bug(s)</div>`:''}
+      </div>`).join('')}
+    </div>`:'<div style="color:var(--c-low);font-size:.82rem;padding:.5rem 0;margin-bottom:1rem">✓ No significant issues detected.</div>';
+
+  // Per-bug scores
+  const bs=ev.bug_scores||[];
+  const bsHtml=bs.length?`
+    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:.55rem">
+      Per-Bug Quality Scores
+    </div>
+    <div class="bug-score-list">
+      ${[...bs].sort((a,b)=>a.score-b.score).map(b=>{
+        const g=_bugScoreGrade(b.score);
+        return `<div class="bs-row">
+          <span class="bs-score-badge bs-score-${g}">${b.score.toFixed(0)}</span>
+          <span class="bs-title" title="${esc(b.title)}">${esc(b.title)}</span>
+          <span class="bs-issues">${esc((b.issues||[]).slice(0,2).join(' · '))}</span>
+        </div>`;
+      }).join('')}
+    </div>`:'';
+
+  document.getElementById('eval-content').innerHTML=heroHtml+dimsHtml+fbHtml+bsHtml;
+
+  // Grade badge in sidebar
+  const badge=document.getElementById('eval-grade-badge');
+  if(badge){ badge.textContent=grade; badge.style.display=''; }
+
+  // Ground-truth results
+  if(ev.gt_recall_pct!=null){
+    document.getElementById('gt-result').style.display='block';
+    document.getElementById('gt-stats').innerHTML=[
+      {n:`${ev.gt_recall_pct.toFixed(1)}%`,l:'Recall',c:ev.gt_recall_pct>=70?'var(--c-low)':'var(--c-critical)'},
+      {n:`${(ev.gt_precision_pct||0).toFixed(1)}%`,l:'Precision',c:'var(--accent2)'},
+      {n:`${(ev.gt_f1_score||0).toFixed(1)}%`,l:'F1 Score',c:'var(--c-medium)'},
+    ].map(s=>`<div class="gt-stat"><div class="gt-num" style="color:${s.c}">${s.n}</div><div class="gt-lbl">${s.l}</div></div>`).join('');
+  }
+}
 </script>
 </body>
 </html>

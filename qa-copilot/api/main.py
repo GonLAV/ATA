@@ -19,6 +19,7 @@ from api.routes import (
     integrations as integrations_router,
     webhooks as webhooks_router,
     analytics as analytics_router,
+    evaluations as evaluations_router,
 )
 from db.database import init_db
 
@@ -54,7 +55,7 @@ app = FastAPI(
         "Autonomous AI-powered QA testing agent. "
         "Explores web applications like a human, finds bugs, generates reports."
     ),
-    version="1.2.0",
+    version="1.3.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     lifespan=lifespan,
@@ -75,6 +76,7 @@ app.include_router(notifications_router.router, prefix="/api")
 app.include_router(integrations_router.router,  prefix="/api")
 app.include_router(webhooks_router.router,      prefix="/api")
 app.include_router(analytics_router.router,     prefix="/api")
+app.include_router(evaluations_router.router,   prefix="/api")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -84,7 +86,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "service": "qa-copilot", "version": "1.2.0"}
+    return {"status": "ok", "service": "qa-copilot", "version": "1.3.0"}
 
 
 @app.exception_handler(Exception)
