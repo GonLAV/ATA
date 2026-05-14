@@ -12,7 +12,7 @@ const ConfigSchema = z.object({
   maxScenarios: z.coerce.number().int().positive().max(50).default(12),
   openAiApiKey: z.string().optional(),
   openAiBaseUrl: z.string().url().optional(),
-  openAiModel: z.string().min(1).default('gpt-4o-mini'),
+  openAiModel: z.string().min(1).default('gpt-4o'),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
